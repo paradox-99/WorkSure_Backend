@@ -3,7 +3,7 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 
 const userRoutes = require('./routes/userRoutes');
-// const carRoutes = require('./routes/carRoutes');
+const workerRoutes = require('./routes/workerRoutes');
 // const agencyRoutes = require('./routes/agencyRoutes');
 // const driverRoutes = require('./routes/driverRoutes');
 // const paymentRoutes = require('./routes/paymentRoutes');
@@ -23,7 +23,7 @@ app.use(express.json());
 app.use(cookieParser());
 
 app.use('/api/userRoutes', userRoutes);
-// app.use('/api/carRoutes', carRoutes);
+app.use('/api/workerRoutes', workerRoutes);
 // app.use('/api/agencyRoutes', agencyRoutes);
 // app.use('/api/driverRoutes', driverRoutes);
 // app.use('/api/paymentRoutes', paymentRoutes);
