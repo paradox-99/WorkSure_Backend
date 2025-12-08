@@ -1,0 +1,10 @@
+User/Client-------------
+
+1. all user (http://localhost:3000/api/userRoutes/users)
+2. user account creation (http://localhost:3000/api/userRoutes/createUser)
+
+
+Worker-------------------
+
+1. all worker (http://localhost:3000/api/workerRoutes/workers)
+2. 
