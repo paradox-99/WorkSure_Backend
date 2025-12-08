@@ -1,6 +1,7 @@
-import pool from "../config/db.js"
+// import pool from "../config/db.js"
+const pool = require("../config/db");
 
-export const getUsers = async (req, res) => {
+const getUsers = async (req, res) => {
      const query = 'SELECT * FROM users'
      try {
           const result = await pool.query(query)
@@ -10,3 +11,5 @@ export const getUsers = async (req, res) => {
           res.status(500).json({ error: 'Internal Server Error' })
      }
 }
+
+module.exports = { getUsers };
