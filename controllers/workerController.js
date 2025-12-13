@@ -61,4 +61,7 @@ const searchWorkers = async (req, res) => {
      }
 }
 
-module.exports = { getWorkers, searchWorkers, createWorker, createWorkerService, createWorkerAvailability };
+const createWorkerService = async (req, res) => { 
+}
+
+module.exports = { getWorkers, searchWorkers, createWorker, createWorkerService };
