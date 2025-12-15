@@ -154,4 +154,88 @@ const updateWorkerProfile = async (req, res) => {
      }
 };
 
-module.exports = { getWorkers, searchWorkers, createWorker, createWorkerService, createWorkerAvailability, updateWorkerProfile };
+const updateWorkerService = async (req, res) => {
+  const { id } = req.params;
+
+  const {
+    base_price,
+    price_unit,
+    skills,
+    category_id
+  } = req.body;
+
+  try {
+    const data = {
+      ...(base_price !== undefined && { base_price }),
+      ...(price_unit !== undefined && { price_unit }),
+      ...(skills !== undefined && { skills }),
+      ...(category_id !== undefined && { category_id })
+    };
+
+    if (Object.keys(data).length === 0) {
+      return res.status(400).json({ error: "No valid fields to update" });
+    }
+
+    const updatedService = await prisma.workerService.update({
+      where: { id },
+      data
+    });
+
+    res.status(200).json(updatedService);
+  } catch (error) {
+    console.error("Error updating worker service:", error);
+
+    // Unique constraint violation (user_id + category_id)
+    if (error.code === "P2002") {
+      return res.status(409).json({
+        error: "Service already exists for this category"
+      });
+    }
+
+    res.status(500).json({ error: "Failed to update worker service" });
+  }
+};
+
+const updateAvailability = async (req, res) => {
+  const { id } = req.params;
+
+  const {
+    available_from,
+    available_to,
+    weekend
+  } = req.body;
+
+  try {
+    const data = {
+      ...(available_from !== undefined && {
+        available_from: new Date(available_from)
+      }),
+      ...(available_to !== undefined && {
+        available_to: new Date(available_to)
+      }),
+      ...(weekend !== undefined && { weekend })
+    };
+
+    if (
+      data.available_from &&
+      data.available_to &&
+      data.available_from >= data.available_to
+    ) {
+      return res.status(400).json({
+        error: "available_from must be before available_to"
+      });
+    }
+
+    const updatedAvailability = await prisma.availability.update({
+      where: { id },
+      data
+    });
+
+    res.status(200).json(updatedAvailability);
+  } catch (error) {
+    console.error("Error updating availability:", error);
+    res.status(500).json({ error: "Failed to update availability" });
+  }
+};
+
+module.exports = { getWorkers, searchWorkers, createWorker, createWorkerService, createWorkerAvailability, updateWorkerProfile, updateWorkerService, updateAvailability };
