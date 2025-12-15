@@ -1,8 +1,4 @@
-// import pool from "../config/db.js"
-const { log } = require("console");
-const pool = require("../config/db");
 const prisma = require('../config/prisma');
-
 
 const getUsers = async (req, res) => {
      try {
@@ -10,9 +6,7 @@ const getUsers = async (req, res) => {
                where: {
                     role: 'client'
                }
-          })
-          // console.log(users);
-          
+          });
           res.status(200).json(users)
      } catch (error) {
           console.error('Error fetching users:', error)
@@ -22,28 +16,46 @@ const getUsers = async (req, res) => {
 
 const createUser = async (req, res) => {
      const { email, phone, full_name, gender, date_of_birth, nid, profile_picture, street, city, district, postal_code, lat, lon } = req.body
-     console.log(postal_code);
-     
-     const query = `INSERT INTO users (email, phone, full_name, gender, date_of_birth, nid, password_hash,  profile_picture, created_at) VALUES ($1, $2, $3, $4, $5, $6, 'sdskspassword', $7, now()) RETURNING id`
-     try {
-          const result = await pool.query(query, [email, phone, full_name, gender, date_of_birth, nid, profile_picture])
-          if (result.rows.length === 1) {
-               const userId = result.rows[0].id
-               
-               const addressQuery = `INSERT INTO addresses (user_id, street, city, district, postal_code, lat, lon) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`
-               try {
-                    const finalResult = await pool.query(addressQuery, [userId, street, city, district, postal_code, lat, lon])
 
-                    if (finalResult.rowCount > 0)
-                         res.status(201).json({ message: 'User created successfully'})
-                    else
-                         res.status(500).json({ error: 'Failed to insert address' })
-               } catch (error) {
-                    res.status(500).json({ error: 'Error inserting address:' })
-               }
-          }
+     try {
+          await prisma.$transaction(async (tx) => {
+               // 1️⃣ Create user
+               const user = await tx.users.create({
+                    data: {
+                         email,
+                         phone,
+                         full_name,
+                         gender,
+                         date_of_birth: new Date(date_of_birth),
+                         nid,
+                         password_hash: "sdskspassword",
+                         profile_picture,
+                         created_at: new Date()
+                    },
+                    select: {
+                         id: true
+                    }
+               });
+
+               // 2️⃣ Create address
+               await tx.addresses.create({
+                    data: {
+                         userId: user.id,
+                         street,
+                         city,
+                         district,
+                         postal_code,
+                         lat,
+                         lon
+                    }
+               });
+          });
+
+          res.status(201).json({ message: "User created successfully" });
+
      } catch (error) {
-          res.status(500).json({ error: 'Internal Server Error' })
+          console.error("Error creating user:", error);
+          res.status(500).json({ error: "Internal Server Error" });
      }
 }
 
