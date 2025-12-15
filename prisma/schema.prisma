@@ -1,0 +1,248 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model addresses {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id     String?  @db.Uuid
+  street      String?
+  city        String?  @db.VarChar(100)
+  district    String?  @db.VarChar(100)
+  postal_code String?  @db.VarChar(20)
+  lat         Float?
+  lon         Float?
+  users       users?   @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  orders      orders[]
+
+  @@index([user_id], map: "idx_addresses_user")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model availabilities {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id        String?  @db.Uuid
+  available_from DateTime @db.Timestamptz(6)
+  available_to   DateTime @db.Timestamptz(6)
+  weekend        String[]
+  users          users?   @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([user_id], map: "idx_avail_user")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model notifications {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String?   @db.Uuid
+  title      String?
+  body       String?
+  is_read    Boolean?  @default(false)
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+  users      users?    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([user_id], map: "idx_notifications_user")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model orders {
+  id                                     String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  client_id                              String?        @db.Uuid
+  assigned_worker_id                     String?        @db.Uuid
+  status                                 booking_status @default(pending)
+  requested_start                        DateTime       @db.Timestamptz(6)
+  requested_end                          DateTime?      @db.Timestamptz(6)
+  address_id                             String?        @db.Uuid
+  total_amount                           Decimal?       @default(0.0) @db.Decimal(12, 2)
+  currency                               String?        @default("BDT") @db.VarChar(10)
+  description                            String?
+  created_at                             DateTime?      @default(now()) @db.Timestamptz(6)
+  updated_at                             DateTime?      @default(now()) @db.Timestamptz(6)
+  addresses                              addresses?     @relation(fields: [address_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_orders_assigned_worker_idTousers users?         @relation("orders_assigned_worker_idTousers", fields: [assigned_worker_id], references: [id], onUpdate: NoAction)
+  users_orders_client_idTousers          users?         @relation("orders_client_idTousers", fields: [client_id], references: [id], onUpdate: NoAction)
+  payments                               payments[]
+  reviews                                reviews[]
+
+  @@index([client_id], map: "idx_orders_client")
+  @@index([status], map: "idx_orders_status")
+  @@index([assigned_worker_id], map: "idx_orders_worker")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model payments {
+  id             String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  order_id       String?         @db.Uuid
+  payer_id       String?         @db.Uuid
+  payment_method String?         @db.VarChar(50)
+  trx_id         String?         @db.VarChar(255)
+  amount         Decimal         @db.Decimal(12, 2)
+  status         payment_status? @default(pending)
+  paid_at        DateTime?       @db.Timestamptz(6)
+  created_at     DateTime?       @default(now()) @db.Timestamptz(6)
+  orders         orders?         @relation(fields: [order_id], references: [id], onUpdate: NoAction)
+  users          users?          @relation(fields: [payer_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([trx_id], map: "idx_payments_gateway_id")
+  @@index([order_id], map: "idx_payments_order")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model reviews {
+  id                               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  order_id                         String?   @db.Uuid
+  reviewer_id                      String?   @db.Uuid
+  worker_id                        String?   @db.Uuid
+  rating                           Int?      @db.SmallInt
+  comment                          String?
+  created_at                       DateTime? @default(now()) @db.Timestamptz(6)
+  orders                           orders?   @relation(fields: [order_id], references: [id], onUpdate: NoAction)
+  users_reviews_reviewer_idTousers users?    @relation("reviews_reviewer_idTousers", fields: [reviewer_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_reviews_worker_idTousers   users?    @relation("reviews_worker_idTousers", fields: [worker_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([order_id], map: "idx_reviews_order")
+  @@index([worker_id], map: "idx_reviews_worker")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model service_categories {
+  id              Int               @id @default(autoincrement())
+  slug            String            @unique @db.VarChar(100)
+  name            String            @db.VarChar(150)
+  description     String?
+  worker_services worker_services[]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model spatial_ref_sys {
+  srid      Int     @id
+  auth_name String? @db.VarChar(256)
+  auth_srid Int?
+  srtext    String? @db.VarChar(2048)
+  proj4text String? @db.VarChar(2048)
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model users {
+  id                                      String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email                                   String                   @unique @db.VarChar(255)
+  phone                                   String                   @unique @db.VarChar(20)
+  full_name                               String                   @db.VarChar(50)
+  gender                                  gender
+  date_of_birth                           DateTime                 @db.Date
+  nid                                     String?                  @unique @db.VarChar(15)
+  password_hash                           String
+  role                                    user_role                @default(client)
+  profile_picture                         String?
+  created_at                              DateTime?                @default(now()) @db.Timestamptz(6)
+  updated_at                              DateTime?                @default(now()) @db.Timestamptz(6)
+  last_login_at                           DateTime?                @db.Timestamptz(6)
+  is_active                               Boolean?                 @default(true)
+  addresses                               addresses[]
+  availabilities                          availabilities[]
+  notifications                           notifications[]
+  orders_orders_assigned_worker_idTousers orders[]                 @relation("orders_assigned_worker_idTousers")
+  orders_orders_client_idTousers          orders[]                 @relation("orders_client_idTousers")
+  payments                                payments[]
+  reviews_reviews_reviewer_idTousers      reviews[]                @relation("reviews_reviewer_idTousers")
+  reviews_reviews_worker_idTousers        reviews[]                @relation("reviews_worker_idTousers")
+  verification_documents                  verification_documents[]
+  worker_profiles                         worker_profiles?
+  worker_services                         worker_services[]
+
+  @@index([email], map: "idx_users_email")
+  @@index([id], map: "idx_users_id")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model verification_documents {
+  id             String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id        String?              @db.Uuid
+  document_type  String?              @db.VarChar(100)
+  file_url       String?
+  uploaded_at    DateTime?            @default(now()) @db.Timestamptz(6)
+  reviewed_at    DateTime?            @db.Timestamptz(6)
+  review_comment String?
+  status         verification_status? @default(pending)
+  users          users?               @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([user_id], map: "idx_docs_user")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model worker_profiles {
+  user_id          String               @id @db.Uuid
+  display_name     String?              @db.VarChar(150)
+  bio              String?
+  years_experience Int?                 @default(0) @db.SmallInt
+  avg_rating       Decimal?             @default(0.0) @db.Decimal(3, 2)
+  total_reviews    Int?                 @default(0)
+  verification     verification_status? @default(unverified)
+  documents_count  Int?                 @default(0)
+  created_at       DateTime?            @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime?            @default(now()) @db.Timestamptz(6)
+  users            users                @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([verification], map: "idx_worker_verification")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model worker_services {
+  id                 String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id            String?             @db.Uuid
+  category_id        Int?
+  base_price         Decimal             @db.Decimal(12, 2)
+  price_unit         String?             @default("hour") @db.VarChar(20)
+  skills             Json?
+  created_at         DateTime?           @default(now()) @db.Timestamptz(6)
+  service_categories service_categories? @relation(fields: [category_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users              users?              @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, category_id])
+  @@index([category_id], map: "idx_worker_service_category")
+  @@index([user_id], map: "idx_worker_service_user")
+}
+
+enum booking_status {
+  cart
+  pending
+  accepted
+  in_progress
+  completed
+  cancelled
+  no_show
+  disputed
+}
+
+enum gender {
+  male
+  female
+  others
+}
+
+enum payment_status {
+  pending
+  paid
+  failed
+  refunded
+  cancelled
+}
+
+enum user_role {
+  client
+  worker
+  admin
+}
+
+enum verification_status {
+  unverified
+  pending
+  verified
+  rejected
+}

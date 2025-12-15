@@ -1,11 +1,19 @@
 // import pool from "../config/db.js"
+const { log } = require("console");
 const pool = require("../config/db");
+const prisma = require('../config/prisma');
+
 
 const getUsers = async (req, res) => {
-     const query = 'SELECT * FROM users WHERE role=\'client\''
      try {
-          const result = await pool.query(query)
-          res.status(200).json(result.rows)
+          const users = await prisma.users.findMany({
+               where: {
+                    role: 'client'
+               }
+          })
+          // console.log(users);
+          
+          res.status(200).json(users)
      } catch (error) {
           console.error('Error fetching users:', error)
           res.status(500).json({ error: 'Internal Server Error' })
