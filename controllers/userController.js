@@ -59,4 +59,36 @@ const createUser = async (req, res) => {
      }
 }
 
+const updateAddress = async (req, res) => {
+  const { addressId } = req.params;
+
+  const {
+    street,
+    city,
+    district,
+    postal_code,
+    lat,
+    lon
+  } = req.body;
+
+  try {
+    const updatedAddress = await prisma.address.update({
+      where: { id: addressId },
+      data: {
+        ...(street !== undefined && { street }),
+        ...(city !== undefined && { city }),
+        ...(district !== undefined && { district }),
+        ...(postal_code !== undefined && { postal_code }),
+        ...(lat !== undefined && { lat }),
+        ...(lon !== undefined && { lon })
+      }
+    });
+
+    res.status(200).json(updatedAddress);
+  } catch (error) {
+    console.error("Error updating address:", error);
+    res.status(500).json({ error: "Failed to update address" });
+  }
+};
+
 module.exports = { getUsers, createUser };
