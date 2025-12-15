@@ -59,4 +59,87 @@ const createUser = async (req, res) => {
      }
 }
 
-module.exports = { getUsers, createUser };
+const updateAddress = async (req, res) => {
+     const { addressId } = req.params;
+
+     const {
+          street,
+          city,
+          district,
+          postal_code,
+          lat,
+          lon
+     } = req.body;
+
+     try {
+          const updatedAddress = await prisma.address.update({
+               where: { id: addressId },
+               data: {
+                    ...(street !== undefined && { street }),
+                    ...(city !== undefined && { city }),
+                    ...(district !== undefined && { district }),
+                    ...(postal_code !== undefined && { postal_code }),
+                    ...(lat !== undefined && { lat }),
+                    ...(lon !== undefined && { lon })
+               }
+          });
+
+          res.status(200).json(updatedAddress);
+     } catch (error) {
+          console.error("Error updating address:", error);
+          res.status(500).json({ error: "Failed to update address" });
+     }
+};
+
+const updateUser = async (req, res) => {
+     const { id } = req.params;
+
+     const {
+          email,
+          phone,
+          full_name,
+          gender,
+          date_of_birth,
+          nid,
+          profile_picture,
+          role,
+          last_login_at,
+          is_active
+     } = req.body;
+
+     try {
+          const data = {
+               ...(email !== undefined && { email }),
+               ...(phone !== undefined && { phone }),
+               ...(full_name !== undefined && { full_name }),
+               ...(gender !== undefined && { gender }),
+               ...(date_of_birth !== undefined && {
+                    date_of_birth: new Date(date_of_birth)
+               }),
+               ...(nid !== undefined && { nid }),
+               ...(profile_picture !== undefined && { profile_picture }),
+               ...(role !== undefined && { role }),
+               ...(last_login_at !== undefined && {
+                    last_login_at: new Date(last_login_at)
+               }),
+               ...(is_active !== undefined && { is_active })
+          };
+
+
+          if (Object.keys(data).length === 0) {
+               return res.status(400).json({ error: "No valid fields to update" });
+          }
+
+          const updatedUser = await prisma.user.update({
+               where: { id },
+               data
+          });
+
+          res.status(200).json(updatedUser);
+     } catch (error) {
+          console.error("Error updating user:", error);
+          res.status(500).json({ error: "Failed to update user" });
+     }
+};
+
+module.exports = { getUsers, createUser, updateAddress, updateUser };

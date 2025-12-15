@@ -74,7 +74,7 @@ const searchWorkers = async (req, res) => {
      const { categorySlug, lat, lon, radiusMeters } = req.query
 
      console.log(categorySlug);
-     
+
 
      try {
           const workers = await prisma.$queryRaw`
@@ -105,8 +105,8 @@ const searchWorkers = async (req, res) => {
               ST_SetSRID(ST_MakePoint(${lon}, ${lat}), 4326)::geography,
               ${radiusMeters}
             )`;
-            console.log(workers);
-            
+          console.log(workers);
+
           res.status(200).json(workers)
      } catch (error) {
           console.error('Error searching workers:', error)
@@ -114,4 +114,44 @@ const searchWorkers = async (req, res) => {
      }
 }
 
-module.exports = { getWorkers, searchWorkers, createWorker, createWorkerService, createWorkerAvailability };
+const updateWorkerProfile = async (req, res) => {
+     const { userId } = req.params;
+
+     const {
+          display_name,
+          bio,
+          years_experience,
+          avg_rating,
+          total_reviews,
+          verification,
+          documents_count
+     } = req.body;
+
+     try {
+          const data = {
+               ...(display_name !== undefined && { display_name }),
+               ...(bio !== undefined && { bio }),
+               ...(years_experience !== undefined && { years_experience }),
+               ...(avg_rating !== undefined && { avg_rating }),
+               ...(total_reviews !== undefined && { total_reviews }),
+               ...(verification !== undefined && { verification }),
+               ...(documents_count !== undefined && { documents_count })
+          };
+
+          if (Object.keys(data).length === 0) {
+               return res.status(400).json({ error: "No valid fields to update" });
+          }
+
+          const updatedProfile = await prisma.workerProfile.update({
+               where: { user_id: userId },
+               data
+          });
+
+          res.status(200).json(updatedProfile);
+     } catch (error) {
+          console.error("Error updating worker profile:", error);
+          res.status(500).json({ error: "Failed to update worker profile" });
+     }
+};
+
+module.exports = { getWorkers, searchWorkers, createWorker, createWorkerService, createWorkerAvailability, updateWorkerProfile };
