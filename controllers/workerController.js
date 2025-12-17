@@ -83,6 +83,7 @@ const searchWorkers = async (req, res) => {
           )
           SELECT
             u.id AS user_id,
+            u.profile_picture,
             wp.display_name,
             wp.avg_rating,
             a.lat,
@@ -105,7 +106,6 @@ const searchWorkers = async (req, res) => {
               ST_SetSRID(ST_MakePoint(${lon}, ${lat}), 4326)::geography,
               ${radiusMeters}
             )`;
-            console.log(workers);
             
           res.status(200).json(workers)
      } catch (error) {
