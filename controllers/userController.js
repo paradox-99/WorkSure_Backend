@@ -58,6 +58,50 @@ const createUser = async (req, res) => {
      }
 }
 
+const createworker = async (req, res) => {
+     const { email, phone, full_name, gender, date_of_birth, nid, profile_picture, street, city, district, postal_code, lat, lon } = req.body
+
+     try {
+          await prisma.$transaction(async (tx) => {
+               const user = await tx.users.create({
+                    data: {
+                         email,
+                         phone,
+                         full_name,
+                         gender,
+                         date_of_birth: new Date(date_of_birth),
+                         nid,
+                         password_hash: "sdskspassword",
+                         profile_picture,
+                         created_at: new Date()
+                    },
+                    select: {
+                         id: true
+                    }
+               });
+
+               // 2️⃣ Create address
+               await tx.addresses.create({
+                    data: {
+                         userId: user.id,
+                         street,
+                         city,
+                         district,
+                         postal_code,
+                         lat,
+                         lon
+                    }
+               });
+          });
+
+          res.status(201).json({ message: "User created successfully" });
+
+     } catch (error) {
+          console.error("Error creating user:", error);
+          res.status(500).json({ error: "Internal Server Error" });
+     }
+}
+
 const updateAddress = async (req, res) => {
      const { addressId } = req.params;
 
@@ -143,6 +187,8 @@ const updateUser = async (req, res) => {
 
 const getUserData = async (req, res) => {
      const { email } = req.params;
+     console.log(email);
+     
 
      try {
           const user = await prisma.users.findUnique({
@@ -154,7 +200,7 @@ const getUserData = async (req, res) => {
                     addresses: true
                }
           });
-          
+
 
           if (!user) {
                return res.status(404).json({ error: "User not found" });

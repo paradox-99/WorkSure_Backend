@@ -237,4 +237,111 @@ const updateAvailability = async (req, res) => {
   }
 };
 
-module.exports = { getWorkers, searchWorkers, createWorker, createWorkerService, createWorkerAvailability, updateWorkerProfile, updateWorkerService, updateAvailability };
+const getWorkerDetails = async (req, res) => {
+  const { workerId } = req.params;
+
+  try {
+    // Fetch worker details with all related information
+    const workerDetails = await prisma.users.findUnique({
+      where: { id: workerId },
+      select: {
+        id: true,
+        email: true,
+        phone: true,
+        full_name: true,
+        gender: true,
+        role: true,
+        date_of_birth: true,
+        profile_picture: true,
+        created_at: true,
+        last_login_at: true,
+        is_active: true,
+        // Worker profile
+        worker_profiles: {
+          select: {
+            display_name: true,
+            bio: true,
+            years_experience: true,
+            avg_rating: true,
+            total_reviews: true,
+            verification: true,
+            documents_count: true,
+            created_at: true,
+            updated_at: true
+          }
+        },
+        // Services offered by worker
+        worker_services: {
+          select: {
+            id: true,
+            base_price: true,
+            price_unit: true,
+            skills: true,
+            created_at: true,
+            service_categories: {
+              select: {
+                id: true,
+                name: true,
+                slug: true,
+                description: true
+              }
+            }
+          }
+        },
+        // Availability
+        availabilities: {
+          select: {
+            id: true,
+            available_from: true,
+            available_to: true,
+            weekend: true
+          }
+        },
+        // Addresses
+        addresses: {
+          select: {
+            id: true,
+            street: true,
+            city: true,
+            district: true,
+            postal_code: true,
+            lat: true,
+            lon: true
+          }
+        },
+        // Reviews received by worker
+        reviews_reviews_worker_idTousers: {
+          select: {
+            id: true,
+            rating: true,
+            comment: true,
+            created_at: true,
+            users_reviews_reviewer_idTousers: {
+              select: {
+                id: true,
+                full_name: true,
+                profile_picture: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!workerDetails) {
+      return res.status(404).json({ error: 'Worker not found' });
+    }
+
+    // Check if user is actually a worker
+    if (workerDetails.role !== 'worker') {
+      return res.status(400).json({ error: 'User is not a worker' });
+    }
+
+    res.status(200).json(workerDetails);
+  } catch (error) {
+    console.error('Error fetching worker details:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+};
+
+module.exports = { getWorkers, searchWorkers, createWorker, createWorkerService, createWorkerAvailability, updateWorkerProfile, updateWorkerService, updateAvailability, getWorkerDetails };
