@@ -1,8 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const {getWorkers, createWorker, createWorkerAvailability, createWorkerService, searchWorkers, updateWorkerProfile,updateWorkerService, updateAvailability} = require('../controllers/workerController');
+const {getWorkers, createWorker, createWorkerAvailability, createWorkerService, searchWorkers, updateWorkerProfile,updateWorkerService, updateAvailability, getWorkerDetails} = require('../controllers/workerController');
 
 router.get('/workers', getWorkers);
+router.get('/getWorkerDetails/:workerId', getWorkerDetails);
 router.post('/workers', createWorker);
 router.post('/workers/services', createWorkerService);
 router.post('/workers/availability', createWorkerAvailability);
