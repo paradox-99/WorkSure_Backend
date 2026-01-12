@@ -344,4 +344,73 @@ const getWorkerDetails = async (req, res) => {
   }
 };
 
-module.exports = { getWorkers, searchWorkers, createWorker, createWorkerService, createWorkerAvailability, updateWorkerProfile, updateWorkerService, updateAvailability, getWorkerDetails };
+const cancelWorkRequest = async(req, res) => {
+  const { orderId } = req.params;
+  const { workerId } = req.body;
+  const cancelReason = req.body.reason || '';
+
+  try {
+    // Validate input
+    if (!orderId || !workerId) {
+      return res.status(400).json({ error: 'Order ID and Worker ID are required' });
+    }
+
+    // Find the order
+    const order = await prisma.orders.findUnique({
+      where: { id: orderId }
+    });
+
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    // Check if worker is assigned to this order
+    if (order.assigned_worker_id !== workerId) {
+      return res.status(403).json({ error: 'Worker is not assigned to this order' });
+    }
+
+    // Check if order status allows cancellation
+    const cancellableStatuses = ['pending', 'accepted', 'in_progress'];
+    if (!cancellableStatuses.includes(order.status)) {
+      return res.status(400).json({ 
+        error: `Order with status '${order.status}' cannot be cancelled` 
+      });
+    }
+
+    // Update order status to cancelled
+    const updatedOrder = await prisma.orders.update({
+      where: { id: orderId },
+      data: {
+        status: 'cancelled',
+        updated_at: new Date()
+      }
+    });
+
+    // Create a notification for the client
+    const client = await prisma.users.findUnique({
+      where: { id: order.client_id }
+    });
+
+    if (client) {
+      await prisma.notifications.create({
+        data: {
+          user_id: order.client_id,
+          title: 'Work Request Cancelled',
+          body: `The worker has cancelled the work request. Reason: ${cancelReason || 'No reason provided'}`,
+          is_read: false
+        }
+      });
+    }
+
+    res.status(200).json({ 
+      message: 'Work request cancelled successfully',
+      order: updatedOrder 
+    });
+
+  } catch (error) {
+    console.error('Error cancelling work request:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+}
+
+module.exports = { getWorkers, searchWorkers, createWorker, createWorkerService, createWorkerAvailability, updateWorkerProfile, updateWorkerService, updateAvailability, getWorkerDetails, cancelWorkRequest };
