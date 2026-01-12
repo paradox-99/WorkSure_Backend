@@ -413,4 +413,76 @@ const cancelWorkRequest = async(req, res) => {
   }
 }
 
-module.exports = { getWorkers, searchWorkers, createWorker, createWorkerService, createWorkerAvailability, updateWorkerProfile, updateWorkerService, updateAvailability, getWorkerDetails, cancelWorkRequest };
+const acceptWorkRequest = async(req, res) => {
+  const { orderId } = req.params;
+  const { workerId } = req.body;
+
+  try {
+    // Validate input
+    if (!orderId || !workerId) {
+      return res.status(400).json({ error: 'Order ID and Worker ID are required' });
+    }
+
+    // Find the order
+    const order = await prisma.orders.findUnique({
+      where: { id: orderId }
+    });
+
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    // Check if order status is pending
+    if (order.status !== 'pending') {
+      return res.status(400).json({ 
+        error: `Order with status '${order.status}' cannot be accepted` 
+      });
+    }
+
+    // Check if worker is already assigned
+    if (order.assigned_worker_id && order.assigned_worker_id !== workerId) {
+      return res.status(403).json({ error: 'This order is already assigned to another worker' });
+    }
+
+    // Update order - assign worker and change status to accepted
+    const updatedOrder = await prisma.orders.update({
+      where: { id: orderId },
+      data: {
+        assigned_worker_id: workerId,
+        status: 'accepted',
+        updated_at: new Date()
+      },
+      include: {
+        users_orders_client_idTousers: {
+          select: {
+            id: true,
+            full_name: true,
+            email: true
+          }
+        },
+        addresses: true
+      }
+    });
+
+    // Create a notification for the client
+    await prisma.notifications.create({
+      data: {
+        user_id: order.client_id,
+        title: 'Work Request Accepted',
+        body: 'A worker has accepted your work request and will be arriving soon.',
+        is_read: false
+      }
+    });
+
+    res.status(200).json({ 
+      message: 'Work request accepted successfully',
+      order: updatedOrder 
+    });
+
+  } catch (error) {
+    console.error('Error accepting work request:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+}
+
+module.exports = { getWorkers, searchWorkers, createWorker, createWorkerService, createWorkerAvailability, updateWorkerProfile, updateWorkerService, updateAvailability, getWorkerDetails, cancelWorkRequest, acceptWorkRequest };
