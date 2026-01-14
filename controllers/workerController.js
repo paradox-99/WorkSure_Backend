@@ -79,7 +79,7 @@ const searchWorkers = async (req, res) => {
      try {
           const workers = await prisma.$queryRaw`
           WITH cat AS (
-            SELECT id FROM service_categories WHERE slug = ${categorySlug}
+            SELECT id FROM service_sections WHERE slug = ${categorySlug}
           )
           SELECT
             u.id AS user_id,
@@ -97,7 +97,7 @@ const searchWorkers = async (req, res) => {
           JOIN users u ON ws.user_id = u.id
           JOIN worker_profiles wp ON wp.user_id = u.id
           LEFT JOIN addresses a ON a.user_id = u.id
-          WHERE ws.category_id = (SELECT id FROM cat)
+          WHERE ws.section_id = (SELECT id FROM cat)
             AND wp.verification = 'verified'
             AND a.lat IS NOT NULL
             AND a.lon IS NOT NULL
@@ -252,7 +252,7 @@ const getWorkerDetails = async (req, res) => {
         gender: true,
         role: true,
         date_of_birth: true,
-        profile_picture: true,
+        profile_picture: true, 
         created_at: true,
         last_login_at: true,
         is_active: true,
