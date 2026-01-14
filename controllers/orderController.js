@@ -1,4 +1,5 @@
 const prisma = require("../config/prisma");
+const { sendHiringRequestEmail } = require("./mailController");
 
 const createOrder = async (req, res) => {
      const { client_email, worker_id, selected_time, address, description } = req.body;
@@ -8,7 +9,7 @@ const createOrder = async (req, res) => {
           // Fetch client_id from users table using client_email
           const client = await prisma.users.findUnique({
                where: { email: client_email },
-               select: { id: true }
+               select: { id: true, full_name: true }
           });
 
           if (!client) {
@@ -16,6 +17,16 @@ const createOrder = async (req, res) => {
           }
 
           const client_id = client.id;
+
+          // Fetch worker details for email notification
+          const worker = await prisma.users.findUnique({
+               where: { id: worker_id },
+               select: { id: true, email: true, full_name: true }
+          });
+
+          if (!worker) {
+               return res.status(404).json({ error: "Worker not found" });
+          }
 
           // Create the order
           const order = await prisma.orders.create({
@@ -28,6 +39,18 @@ const createOrder = async (req, res) => {
                     status: "pending",
                     payment_completed: false
                }
+          });
+
+          // Send email notification to worker (non-blocking)
+          sendHiringRequestEmail({
+               workerEmail: worker.email,
+               workerName: worker.full_name,
+               clientName: client.full_name,
+               address,
+               description,
+               selectedTime: selected_time
+          }).catch(err => {
+               console.error('Failed to send hiring request email:', err);
           });
 
           res.status(201).json({
