@@ -359,11 +359,65 @@ const getUserOrder = async (req, res) => {
      }
 };
 
+const getWorkerHirings = async (req, res) => {
+     const { email } = req.params;
+
+     try {
+          const worker = await prisma.users.findUnique({
+               where: { email },
+               select: { id: true }
+          });
+
+          if (!worker) {
+               return res.status(404).json({ error: "Worker not found with provided email" });
+          }
+
+          const worker_id = worker.id;
+
+          const orders = await prisma.orders.findMany({
+               where: { assigned_worker_id: worker_id },
+               select: {
+                    id: true,
+                    client_id: true,
+                    assigned_worker_id: true,
+                    selected_time: true,
+                    address: true,
+                    description: true,
+                    status: true,
+                    total_amount: true,
+                    payment_completed: true,
+                    created_at: true,
+                    updated_at: true,
+                    work_start: true,
+                    work_end: true,
+                    users_orders_client_idTousers: {
+                         select: {
+                              id: true,
+                              full_name: true,
+                              email: true,
+                              phone: true,
+                              profile_picture: true
+                         }
+                    }
+               },
+               orderBy: { created_at: 'desc' }
+          });
+
+          res.status(200).json(orders);
+     } catch (error) {
+          console.error('Error fetching worker hirings:', error);
+          res.status(500).json({ error: 'Internal Server Error' });
+     }
+};
+
 module.exports = {
      createOrder,
      getOrders,
      getOrderById,
      updateOrderStatus,
      cancelOrder,
-     getUserOrder
+     getUserOrder,
+    getWorkerHirings
 };
+
+
