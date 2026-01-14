@@ -1,0 +1,122 @@
+const mj = require('../config/mailjet');
+const dotenv = require('dotenv')
+dotenv.config();
+
+exports.sendTest = async (req, res) => {
+  const { ToEmail, ToName, Subject, TextPart, HTMLPart } = req.body || {};
+
+  console.log(process.env.MJ_APIKEY_PUBLIC, process.env.MJ_APIKEY_PRIVATE);
+  const emailFrom = process.env.FROM_EMAIL
+
+  const message = {
+    Messages: [
+      {
+        From: {
+          Email: emailFrom || 'rinayeem546@gmail.com',
+          Name: process.env.FROM_NAME || 'WorkSure'
+        },
+        To: [
+          {
+            Email: ToEmail || 'nayeem.driver@yopmail.com',
+            Name: ToName || 'Recipient'
+          }
+        ],
+        Subject: Subject || 'Test Email from WorkSure',
+        TextPart: TextPart || 'This is a test email sent via Mailjet textpart.',
+        HTMLPart: HTMLPart || '<h3>This is a test email sent via Mailjet inside h3.</h3>'
+      }
+    ]
+  };
+
+  try {
+    const request = await mj.post('send', { version: 'v3.1' }).request(message);
+    return res.json({ ok: true, data: request.body });
+  } catch (err) {
+    console.error('Mailjet error:', {
+      message: err && err.message,
+      statusCode: err && (err.statusCode || err.status),
+      responseBody: err && err.response && err.response.body
+    });
+    const status = (err && (err.statusCode || err.status)) || 500;
+    return res.status(status).json({ ok: false, error: err.message || err, details: err && err.response && err.response.body });
+  }
+};
+
+/**
+ * Send hiring request notification email to worker
+ * @param {Object} params - Email parameters
+ * @param {string} params.workerEmail - Worker's email address
+ * @param {string} params.workerName - Worker's name
+ * @param {string} params.clientName - Client's name
+ * @param {string} params.address - Work address
+ * @param {string} params.description - Job description
+ * @param {Date} params.selectedTime - Scheduled time for the work
+ * @returns {Promise<Object>} - Email send result
+ */
+exports.sendHiringRequestEmail = async ({ workerEmail, workerName, clientName, address, description, selectedTime }) => {
+  const emailFrom = process.env.FROM_EMAIL;
+  const formattedTime = selectedTime ? new Date(selectedTime).toLocaleString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  }) : 'Not specified';
+
+  const message = {
+    Messages: [
+      {
+        From: {
+          Email: emailFrom || 'rinayeem546@gmail.com',
+          Name: process.env.FROM_NAME || 'WorkSure'
+        },
+        To: [
+          {
+            Email: workerEmail,
+            Name: workerName || 'Worker'
+          }
+        ],
+        Subject: '🔔 New Work Request - WorkSure',
+        TextPart: `Hello ${workerName || 'Worker'},\n\nYou have received a new work request from ${clientName}.\n\nDetails:\n- Address: ${address || 'Not specified'}\n- Scheduled Time: ${formattedTime}\n- Description: ${description || 'No description provided'}\n\nPlease log in to your WorkSure account to accept or decline this request.\n\nBest regards,\nThe WorkSure Team`,
+        HTMLPart: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
+              <h1 style="color: white; margin: 0;">🔔 New Work Request!</h1>
+            </div>
+            <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; border: 1px solid #e0e0e0;">
+              <p style="font-size: 16px; color: #333;">Hello <strong>${workerName || 'Worker'}</strong>,</p>
+              <p style="font-size: 16px; color: #333;">You have received a new work request from <strong>${clientName}</strong>!</p>
+              
+              <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #667eea;">
+                <h3 style="margin-top: 0; color: #667eea;">📋 Request Details</h3>
+                <p style="margin: 10px 0;"><strong>📍 Address:</strong> ${address || 'Not specified'}</p>
+                <p style="margin: 10px 0;"><strong>🕐 Scheduled Time:</strong> ${formattedTime}</p>
+                <p style="margin: 10px 0;"><strong>📝 Description:</strong> ${description || 'No description provided'}</p>
+              </div>
+              
+              <p style="font-size: 16px; color: #333;">Please log in to your WorkSure account to review and respond to this request.</p>
+              
+              <div style="text-align: center; margin-top: 30px;">
+                <p style="color: #666; font-size: 14px;">Best regards,<br><strong>The WorkSure Team</strong></p>
+              </div>
+            </div>
+          </div>
+        `
+      }
+    ]
+  };
+
+  try {
+    const request = await mj.post('send', { version: 'v3.1' }).request(message);
+    console.log('Hiring request email sent successfully to:', workerEmail);
+    return { ok: true, data: request.body };
+  } catch (err) {
+    console.error('Mailjet error sending hiring request email:', {
+      message: err && err.message,
+      statusCode: err && (err.statusCode || err.status),
+      responseBody: err && err.response && err.response.body
+    });
+    return { ok: false, error: err.message || err };
+  }
+};
