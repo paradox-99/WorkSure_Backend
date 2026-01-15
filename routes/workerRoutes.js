@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const {getWorkers, createWorker, createWorkerAvailability, createWorkerService, searchWorkers, updateWorkerProfile,updateWorkerService, updateAvailability, getWorkerDetails, cancelWorkRequest, acceptWorkRequest} = require('../controllers/workerController');
-const { getWorkerHirings } = require('../controllers/orderController');
+const { getWorkerHirings, getWorkerRequests } = require('../controllers/orderController');
 
 router.get('/workers', getWorkers);
 router.get('/getWorkerDetails/:workerId', getWorkerDetails);
@@ -15,5 +15,6 @@ router.patch('/updateAvailability/:id', updateAvailability);
 router.post('/workers/accept-request/:orderId', acceptWorkRequest);
 router.patch('/cancelWorkRequest/:id', cancelWorkRequest);
 router.get('/hirings/:email', getWorkerHirings);
+router.get('/hirings/requests/:email', getWorkerRequests);
 
 module.exports = router;
