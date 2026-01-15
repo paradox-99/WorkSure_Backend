@@ -1,4 +1,5 @@
 const prisma = require("../config/prisma");
+const { sendHiringRequestEmail } = require("./mailController");
 
 const createOrder = async (req, res) => {
      const { client_email, worker_id, selected_time, address, description } = req.body;
@@ -8,7 +9,7 @@ const createOrder = async (req, res) => {
           // Fetch client_id from users table using client_email
           const client = await prisma.users.findUnique({
                where: { email: client_email },
-               select: { id: true }
+               select: { id: true, full_name: true }
           });
 
           if (!client) {
@@ -16,6 +17,16 @@ const createOrder = async (req, res) => {
           }
 
           const client_id = client.id;
+
+          // Fetch worker details for email notification
+          const worker = await prisma.users.findUnique({
+               where: { id: worker_id },
+               select: { id: true, email: true, full_name: true }
+          });
+
+          if (!worker) {
+               return res.status(404).json({ error: "Worker not found" });
+          }
 
           // Create the order
           const order = await prisma.orders.create({
@@ -28,6 +39,18 @@ const createOrder = async (req, res) => {
                     status: "pending",
                     payment_completed: false
                }
+          });
+
+          // Send email notification to worker (non-blocking)
+          sendHiringRequestEmail({
+               workerEmail: worker.email,
+               workerName: worker.full_name,
+               clientName: client.full_name,
+               address,
+               description,
+               selectedTime: selected_time
+          }).catch(err => {
+               console.error('Failed to send hiring request email:', err);
           });
 
           res.status(201).json({
@@ -230,7 +253,7 @@ const cancelOrder = async (req, res) => {
      const { orderId } = req.params;
 
      console.log(orderId);
-      
+
 
      try {
           const order = await prisma.orders.findUnique({
@@ -336,11 +359,224 @@ const getUserOrder = async (req, res) => {
      }
 };
 
+const getWorkerHirings = async (req, res) => {
+     const { email } = req.params;
+
+     try {
+          const worker = await prisma.users.findUnique({
+               where: { email },
+               select: { id: true }
+          });
+
+          if (!worker) {
+               return res.status(404).json({ error: "Worker not found with provided email" });
+          }
+
+          const worker_id = worker.id;
+
+          const orders = await prisma.orders.findMany({
+               where: { assigned_worker_id: worker_id },
+               select: {
+                    id: true,
+                    client_id: true,
+                    assigned_worker_id: true,
+                    selected_time: true,
+                    address: true,
+                    description: true,
+                    status: true,
+                    total_amount: true,
+                    payment_completed: true,
+                    created_at: true,
+                    updated_at: true,
+                    work_start: true,
+                    work_end: true,
+                    users_orders_client_idTousers: {
+                         select: {
+                              id: true,
+                              full_name: true,
+                              email: true,
+                              phone: true,
+                              profile_picture: true
+                         }
+                    }
+               },
+               orderBy: { created_at: 'desc' }
+          });
+
+          res.status(200).json(orders);
+     } catch (error) {
+          console.error('Error fetching worker hirings:', error);
+          res.status(500).json({ error: 'Internal Server Error' });
+     }
+};
+
+const getWorkerRequests = async (req, res) => {
+     const { email } = req.params;
+console.log(email);
+
+     try {
+          const worker = await prisma.users.findUnique({
+               where: { email },
+               select: { id: true }
+          });
+
+          if (!worker) {
+               return res.status(404).json({ error: "Worker not found with provided email" });
+          }
+
+          const worker_id = worker.id;
+
+          const orders = await prisma.orders.findMany({
+               where: { assigned_worker_id: worker_id, status: 'pending' },
+               select: {
+                    id: true,
+                    client_id: true,
+                    assigned_worker_id: true,
+                    selected_time: true,
+                    address: true,
+                    description: true,
+                    status: true,
+                    total_amount: true,
+                    payment_completed: true,
+                    created_at: true,
+                    updated_at: true,
+                    work_start: true,
+                    work_end: true,
+                    users_orders_client_idTousers: {
+                         select: {
+                              id: true,
+                              full_name: true,
+                              email: true,
+                              phone: true,
+                              profile_picture: true
+                         }
+                    }
+               },
+               orderBy: { created_at: 'desc' }
+          });
+
+          res.status(200).json(orders);
+     } catch (error) {
+          console.error('Error fetching worker requests:', error);
+          res.status(500).json({ error: 'Internal Server Error' });
+     }
+};
+
+const acceptRequest = async (req, res) => {
+     const { orderId } = req.params;
+     const { workerId } = req.body;
+
+     try {
+          if (!orderId || !workerId) {
+               return res.status(400).json({ error: 'Order ID and Worker ID are required' });
+          }
+
+          const order = await prisma.orders.findUnique({ where: { id: orderId } });
+
+          if (!order) {
+               return res.status(404).json({ error: 'Order not found' });
+          }
+
+          if (order.status !== 'pending') {
+               return res.status(400).json({ error: `Order with status '${order.status}' cannot be accepted` });
+          }
+
+          if (order.assigned_worker_id && order.assigned_worker_id !== workerId) {
+               return res.status(403).json({ error: 'This order is already assigned to another worker' });
+          }
+
+          const updatedOrder = await prisma.orders.update({
+               where: { id: orderId },
+               data: {
+                    assigned_worker_id: workerId,
+                    status: 'accepted',
+                    updated_at: new Date()
+               },
+               include: {
+                    users_orders_client_idTousers: {
+                         select: { id: true, full_name: true, email: true }
+                    },
+                    addresses: true
+               }
+          });
+
+          // Notify client
+          await prisma.notifications.create({
+               data: {
+                    user_id: order.client_id,
+                    title: 'Work Request Accepted',
+                    body: 'A worker has accepted your work request and will be arriving soon.',
+                    is_read: false
+               }
+          });
+
+          res.status(200).json({ message: 'Work request accepted successfully', order: updatedOrder });
+     } catch (error) {
+          console.error('Error accepting work request:', error);
+          res.status(500).json({ error: 'Internal Server Error' });
+     }
+};
+
+const cancelRequest = async (req, res) => {
+     const { orderId } = req.params;
+     const { workerId, reason } = req.body;
+
+     try {
+          if (!orderId || !workerId) {
+               return res.status(400).json({ error: 'Order ID and Worker ID are required' });
+          }
+
+          const order = await prisma.orders.findUnique({ where: { id: orderId } });
+
+          if (!order) {
+               return res.status(404).json({ error: 'Order not found' });
+          }
+
+          if (order.assigned_worker_id !== workerId) {
+               return res.status(403).json({ error: 'Worker is not assigned to this order' });
+          }
+
+          const cancellableStatuses = ['pending', 'accepted', 'in_progress'];
+          if (!cancellableStatuses.includes(order.status)) {
+               return res.status(400).json({ error: `Order with status '${order.status}' cannot be cancelled` });
+          }
+
+          const updatedOrder = await prisma.orders.update({
+               where: { id: orderId },
+               data: {
+                    status: 'cancelled',
+                    updated_at: new Date()
+               }
+          });
+
+          // Notify client
+          await prisma.notifications.create({
+               data: {
+                    user_id: order.client_id,
+                    title: 'Work Request Cancelled',
+                    body: `The worker has cancelled the work request. Reason: ${reason || 'No reason provided'}`,
+                    is_read: false
+               }
+          });
+
+          res.status(200).json({ message: 'Work request cancelled successfully', order: updatedOrder });
+     } catch (error) {
+          console.error('Error cancelling work request:', error);
+          res.status(500).json({ error: 'Internal Server Error' });
+     }
+};
+
 module.exports = {
      createOrder,
      getOrders,
      getOrderById,
      updateOrderStatus,
      cancelOrder,
-     getUserOrder
+     getUserOrder,
+     getWorkerHirings,
+     getWorkerRequests,
+     acceptRequest,
+     cancelRequest
 };
+
+
