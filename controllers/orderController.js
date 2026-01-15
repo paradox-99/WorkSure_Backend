@@ -517,6 +517,54 @@ const acceptRequest = async (req, res) => {
      }
 };
 
+const cancelRequest = async (req, res) => {
+     const { orderId } = req.params;
+     const { workerId, reason } = req.body;
+
+     try {
+          if (!orderId || !workerId) {
+               return res.status(400).json({ error: 'Order ID and Worker ID are required' });
+          }
+
+          const order = await prisma.orders.findUnique({ where: { id: orderId } });
+
+          if (!order) {
+               return res.status(404).json({ error: 'Order not found' });
+          }
+
+          if (order.assigned_worker_id !== workerId) {
+               return res.status(403).json({ error: 'Worker is not assigned to this order' });
+          }
+
+          const cancellableStatuses = ['pending', 'accepted', 'in_progress'];
+          if (!cancellableStatuses.includes(order.status)) {
+               return res.status(400).json({ error: `Order with status '${order.status}' cannot be cancelled` });
+          }
+
+          const updatedOrder = await prisma.orders.update({
+               where: { id: orderId },
+               data: {
+                    status: 'cancelled',
+                    updated_at: new Date()
+               }
+          });
+
+          // Notify client
+          await prisma.notifications.create({
+               data: {
+                    user_id: order.client_id,
+                    title: 'Work Request Cancelled',
+                    body: `The worker has cancelled the work request. Reason: ${reason || 'No reason provided'}`,
+                    is_read: false
+               }
+          });
+
+          res.status(200).json({ message: 'Work request cancelled successfully', order: updatedOrder });
+     } catch (error) {
+          console.error('Error cancelling work request:', error);
+          res.status(500).json({ error: 'Internal Server Error' });
+     }
+};
 
 module.exports = {
      createOrder,
@@ -527,7 +575,8 @@ module.exports = {
      getUserOrder,
      getWorkerHirings,
      getWorkerRequests,
-     acceptRequest
+     acceptRequest,
+     cancelRequest
 };
 
 

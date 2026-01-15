@@ -9,7 +9,7 @@ const {
   getUserOrder
 } = require('../controllers/orderController');
 
-const { acceptRequest } = require('../controllers/orderController');
+const { acceptRequest, cancelRequest } = require('../controllers/orderController');
 
 // Create a new order
 router.post('/createOrder', createOrder);
@@ -28,6 +28,9 @@ router.post('/cancelOrder/:orderId', cancelOrder);
 router.get('/orders/user/:email', getUserOrder);
 
 // Worker accepts a pending order
-router.post('/orders/:orderId/accept', acceptRequest);
+router.patch('/acceptWorkRequest/:orderId', acceptRequest);
+
+// Worker cancels a work request
+router.patch('/cancelWorkRequest/:orderId', cancelRequest);
 
 module.exports = router;
