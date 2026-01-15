@@ -9,6 +9,8 @@ const {
   getUserOrder
 } = require('../controllers/orderController');
 
+const { acceptRequest } = require('../controllers/orderController');
+
 // Create a new order
 router.post('/createOrder', createOrder);
 
@@ -24,5 +26,8 @@ router.patch('/orders/:orderId/status', updateOrderStatus);
 // Cancel an order
 router.post('/cancelOrder/:orderId', cancelOrder);
 router.get('/orders/user/:email', getUserOrder);
+
+// Worker accepts a pending order
+router.post('/orders/:orderId/accept', acceptRequest);
 
 module.exports = router;
