@@ -63,6 +63,8 @@ model orders {
   address                                String?
   selected_time                          DateTime?      @db.Timestamptz(6)
   payment_completed                      Boolean?
+  cancel_reason                          String?
+  canceled_by                            String?
   users_orders_assigned_worker_idTousers users?         @relation("orders_assigned_worker_idTousers", fields: [assigned_worker_id], references: [id], onUpdate: NoAction)
   users_orders_client_idTousers          users?         @relation("orders_client_idTousers", fields: [client_id], references: [id], onUpdate: NoAction)
   payments                               payments[]
