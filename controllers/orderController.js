@@ -465,6 +465,9 @@ const acceptRequest = async (req, res) => {
      const { orderId } = req.params;
      const { workerEmail } = req.body;
 
+     console.log(orderId, "Email: ", workerEmail);
+     
+
      try {
           if (!orderId || !workerEmail) {
                return res.status(400).json({ error: 'Order ID and Worker Email are required' });
@@ -503,12 +506,6 @@ const acceptRequest = async (req, res) => {
                     status: 'accepted',
                     updated_at: new Date()
                },
-               include: {
-                    users_orders_client_idTousers: {
-                         select: { id: true, full_name: true, email: true }
-                    },
-                    addresses: true
-               }
           });
 
           // Notify client
@@ -521,7 +518,7 @@ const acceptRequest = async (req, res) => {
                }
           });
 
-          res.status(200).json({ message: 'Work request accepted successfully', order: updatedOrder });
+          res.status(200).json({ message: 'Work request accepted successfully' });
      } catch (error) {
           console.error('Error accepting work request:', error);
           res.status(500).json({ error: 'Internal Server Error' });
