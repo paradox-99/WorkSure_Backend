@@ -143,7 +143,8 @@ const getTodaysWorks = async (workerId) => {
                     id: true,
                     full_name: true,
                     email: true,
-                    phone: true
+                    phone: true,
+                    profile_picture: true
                 }
             }
         },
@@ -157,6 +158,7 @@ const getTodaysWorks = async (workerId) => {
         client_name: order.users_orders_client_idTousers?.full_name || 'Unknown',
         client_email: order.users_orders_client_idTousers?.email || null,
         client_phone: order.users_orders_client_idTousers?.phone || null,
+        client_picture: order.users_orders_client_idTousers?.profile_picture || null,
         service_name: order.description || 'Service',
         start_time: order.selected_time,
         countdown: order.selected_time ? calculateCountdown(order.selected_time) : null,
@@ -182,7 +184,7 @@ const getUpcomingWorks = async (workerId, limit = 10) => {
                 gt: endOfDay
             },
             status: {
-                in: ['accepted', 'pending']
+                in: ['accepted']
             }
         },
         select: {
@@ -195,7 +197,8 @@ const getUpcomingWorks = async (workerId, limit = 10) => {
                 select: {
                     id: true,
                     full_name: true,
-                    email: true
+                    email: true,
+                    profile_picture: true
                 }
             }
         },
@@ -208,6 +211,7 @@ const getUpcomingWorks = async (workerId, limit = 10) => {
     return orders.map(order => ({
         booking_id: order.id,
         client_name: order.users_orders_client_idTousers?.full_name || 'Unknown',
+        client_picture: order.users_orders_client_idTousers?.profile_picture || null,
         service_name: order.description || 'Service',
         date_time: order.selected_time,
         days_until: order.selected_time ? calculateDaysUntil(order.selected_time) : null,
@@ -239,7 +243,8 @@ const getServiceRequests = async (workerId, limit = 10) => {
                     id: true,
                     full_name: true,
                     email: true,
-                    phone: true
+                    phone: true,
+                    profile_picture: true
                 }
             }
         },
@@ -254,6 +259,7 @@ const getServiceRequests = async (workerId, limit = 10) => {
     return orders.map(order => ({
         request_id: order.id,
         user_name: order.users_orders_client_idTousers?.full_name || 'Unknown',
+        client_picture: order.users_orders_client_idTousers?.profile_picture || null,
         task_name: order.description || 'Service Request',
         location: order.address || 'Not specified',
         email: order.users_orders_client_idTousers?.email || null,
@@ -295,7 +301,6 @@ const getTasksAndRequests = async (workerId) => {
 };
 
 module.exports = {
-    getDashboardOverview,
     getSummaryCards,
     getTodaysWorks,
     getUpcomingWorks,
