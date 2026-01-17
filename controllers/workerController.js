@@ -716,4 +716,4 @@ const getWorkerDetailsByEmail = async (req, res) => {
   }
 };
 
-module.exports = { getWorkers, searchWorkers, createWorker, createWorkerService, createWorkerAvailability, updateWorkerProfile, updateWorkerService, updateAvailability, getWorkerDetails, cancelWorkRequest, acceptWorkRequest, getWorkerDashboardOverview, getWorkerDashboardSummary, getWorkerDashboardTasks, getWorkerDetailsByEmail };
+module.exports = { getWorkers, searchWorkers, createWorker, createWorkerService, createWorkerAvailability, updateWorkerProfile, updateWorkerService, updateAvailability, getWorkerDetails, cancelWorkRequest, acceptWorkRequest, getWorkerDashboardSummary, getWorkerDashboardTasks, getWorkerDetailsByEmail };
