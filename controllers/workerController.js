@@ -1,5 +1,5 @@
 const prisma = require("../config/prisma");
-const { getDashboardOverview } = require("../services/workerDashboardService");
+const { getDashboardOverview, getSummaryOnly, getTasksAndRequests } = require("../services/workerDashboardService");
 
 const getWorkers = async (req, res) => {
      try {
@@ -478,11 +478,11 @@ const acceptWorkRequest = async(req, res) => {
 }
 
 /**
- * Get Worker Dashboard Overview
- * Returns all data required to render the worker dashboard
- * @route GET /api/worker/dashboard/overview/:email
+ * Get Worker Dashboard Summary Cards Only
+ * Returns only the summary card data for the worker dashboard
+ * @route GET /api/workerRoutes/dashboard/summary/:email
  */
-const getWorkerDashboardOverview = async (req, res) => {
+const getWorkerDashboardSummary = async (req, res) => {
   try {
     const { email } = req.params;
     
@@ -510,22 +510,70 @@ const getWorkerDashboardOverview = async (req, res) => {
 
     const workerId = worker.id;
 
-    // Get dashboard overview data
-    const dashboardData = await getDashboardOverview(workerId);
-
-    console.log(dashboardData);
-    
+    // Get summary cards data only
+    const summaryData = await getSummaryOnly(workerId);
 
     res.status(200).json({
       success: true,
       worker_name: worker.full_name,
-      ...dashboardData
+      ...summaryData
     });
 
   } catch (error) {
-    console.error('Error fetching worker dashboard overview:', error);
+    console.error('Error fetching worker dashboard summary:', error);
     res.status(500).json({ 
-      error: 'Failed to fetch dashboard data',
+      error: 'Failed to fetch summary data',
+      message: error.message 
+    });
+  }
+};
+
+/**
+ * Get Worker Dashboard Tasks and Requests
+ * Returns today's works, upcoming works, and service requests
+ * @route GET /api/workerRoutes/dashboard/tasks/:email
+ */
+const getWorkerDashboardTasks = async (req, res) => {
+  try {
+    const { email } = req.params;
+    
+    if (!email) {
+      return res.status(400).json({ 
+        error: 'Email is required' 
+      });
+    }
+
+    // Fetch worker by email
+    const worker = await prisma.users.findUnique({
+      where: { email: email },
+      select: { id: true, role: true, full_name: true }
+    });
+
+    if (!worker) {
+      return res.status(404).json({ error: 'Worker not found' });
+    }
+
+    if (worker.role !== 'worker') {
+      return res.status(403).json({ 
+        error: 'Access denied. This endpoint is only accessible to workers.' 
+      });
+    }
+
+    const workerId = worker.id;
+
+    // Get tasks and requests data
+    const tasksData = await getTasksAndRequests(workerId);
+
+    res.status(200).json({
+      success: true,
+      worker_name: worker.full_name,
+      ...tasksData
+    });
+
+  } catch (error) {
+    console.error('Error fetching worker dashboard tasks:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch tasks data',
       message: error.message 
     });
   }
@@ -668,4 +716,4 @@ const getWorkerDetailsByEmail = async (req, res) => {
   }
 };
 
-module.exports = { getWorkers, searchWorkers, createWorker, createWorkerService, createWorkerAvailability, updateWorkerProfile, updateWorkerService, updateAvailability, getWorkerDetails, cancelWorkRequest, acceptWorkRequest, getWorkerDashboardOverview, getWorkerDetailsByEmail };
+module.exports = { getWorkers, searchWorkers, createWorker, createWorkerService, createWorkerAvailability, updateWorkerProfile, updateWorkerService, updateAvailability, getWorkerDetails, cancelWorkRequest, acceptWorkRequest, getWorkerDashboardOverview, getWorkerDashboardSummary, getWorkerDashboardTasks, getWorkerDetailsByEmail };

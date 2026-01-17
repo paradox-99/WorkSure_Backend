@@ -70,7 +70,7 @@ const getSummaryCards = async (workerId) => {
                 lte: endOfDay
             },
             status: {
-                notIn: ['cancelled', 'cart', 'completed', 'pending']
+                in: ['accepted', 'in_progress']
             }
         }
     });
@@ -96,16 +96,19 @@ const getSummaryCards = async (workerId) => {
             status: 'pending'
         }
     });
-    
-    // Calculate available slots (assuming 8 slots per day - configurable)
-    const MAX_DAILY_SLOTS = 8;
-    const availableSlots = Math.max(0, MAX_DAILY_SLOTS - todaysAppointments);
+
+    const completed = await prisma.orders.count({
+        where: {
+            assigned_worker_id: workerId,
+            status: 'completed'
+        }
+    });
     
     return {
         todaysAppointments,
         confirmed,
         pending,
-        availableSlots
+        completed
     };
 };
 
@@ -245,6 +248,8 @@ const getServiceRequests = async (workerId, limit = 10) => {
         },
         take: limit
     });
+
+    console.log("test: ", orders);
     
     return orders.map(order => ({
         request_id: order.id,
@@ -260,24 +265,31 @@ const getServiceRequests = async (workerId, limit = 10) => {
 };
 
 /**
- * Get complete dashboard overview data
+ * Get only summary cards data for worker dashboard
  * @param {string} workerId 
  * @returns {Promise<Object>}
  */
-const getDashboardOverview = async (workerId) => {
+const getSummaryOnly = async (workerId) => {
+    const summary = await getSummaryCards(workerId);
+    return { summary };
+};
+
+/**
+ * Get today's works, upcoming works, and service requests for worker dashboard
+ * @param {string} workerId 
+ * @returns {Promise<Object>}
+ */
+const getTasksAndRequests = async (workerId) => {
     // Execute all queries in parallel for efficiency
-    const [summary, todaysWorks, upcomingWorks, upcomingDays, serviceRequests] = await Promise.all([
-        getSummaryCards(workerId),
+    const [todaysWorks, upcomingWorks, serviceRequests] = await Promise.all([
         getTodaysWorks(workerId),
         getUpcomingWorks(workerId),
         getServiceRequests(workerId)
     ]);
     
     return {
-        summary,
         todaysWorks,
         upcomingWorks,
-        upcomingDays,
         serviceRequests
     };
 };
@@ -287,5 +299,7 @@ module.exports = {
     getSummaryCards,
     getTodaysWorks,
     getUpcomingWorks,
-    getServiceRequests
+    getServiceRequests,
+    getSummaryOnly,
+    getTasksAndRequests
 };
