@@ -275,6 +275,8 @@ const getServiceRequests = async (workerId, limit = 10) => {
  */
 const getSummaryOnly = async (workerId) => {
     const summary = await getSummaryCards(workerId);
+    console.log(summary);
+    
     return { summary };
 };
 

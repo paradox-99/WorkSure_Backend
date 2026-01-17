@@ -1,7 +1,7 @@
 const prisma = require("../config/prisma");
 
 const { sendRequestAcceptedEmail, sendRequestCancelledEmail } = require("./mailController");
-const { getDashboardOverview, getSummaryOnly, getTasksAndRequests } = require("../services/workerDashboardService");
+const { getSummaryOnly, getTasksAndRequests } = require("../services/workerDashboardService");
 
 const getWorkers = async (req, res) => {
      try {

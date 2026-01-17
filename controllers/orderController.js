@@ -661,6 +661,27 @@ const startWork = async (req, res) => {
      }
 };
 
+const getStartTime = async (req, res) => {
+     const {orderId } = req.params;
+
+     try {
+          const order = await prisma.orders.findUnique({
+               where: { id: orderId },
+               select: { work_start: true }
+          });
+
+          if (!order) {
+               return null;
+          }
+
+          res.status(200).json({ work_start: order.work_start });
+     }
+     catch (error) {
+          console.error('Error fetching work start time:', error);
+          res.status(500).json({ error: 'Internal Server Error' });
+     }
+}
+
 module.exports = {
      createOrder,
      getOrders,
@@ -672,7 +693,8 @@ module.exports = {
      getWorkerRequests,
      acceptRequest,
      cancelRequest,
-     startWork
+     startWork,
+     getStartTime
 };
 
 
