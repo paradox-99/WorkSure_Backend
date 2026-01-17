@@ -1,4 +1,6 @@
 const prisma = require("../config/prisma");
+
+const { sendRequestAcceptedEmail, sendRequestCancelledEmail } = require("./mailController");
 const { getDashboardOverview, getSummaryOnly, getTasksAndRequests } = require("../services/workerDashboardService");
 
 const getWorkers = async (req, res) => {
@@ -378,6 +380,20 @@ const cancelWorkRequest = async(req, res) => {
       }
     });
 
+    // Get worker details for email
+    const worker = await prisma.users.findUnique({
+      where: { id: workerId },
+      select: { full_name: true }
+    });
+
+    // Get order address
+    const orderAddress = await prisma.addresses.findUnique({
+      where: { id: order.address_id }
+    });
+    const addressString = orderAddress ? 
+      `${orderAddress.street || ''}, ${orderAddress.city || ''}, ${orderAddress.district || ''}`.replace(/^, |, $/g, '') : 
+      'Not specified';
+
     // Create a notification for the client
     const client = await prisma.users.findUnique({
       where: { id: order.client_id }
@@ -392,6 +408,19 @@ const cancelWorkRequest = async(req, res) => {
           is_read: false
         }
       });
+
+      // Send cancellation email to client
+      if (client.email) {
+        await sendRequestCancelledEmail({
+          clientEmail: client.email,
+          clientName: client.full_name,
+          workerName: worker?.full_name || 'Worker',
+          address: addressString,
+          description: order.description,
+          cancelReason: cancelReason,
+          selectedTime: order.scheduled_at
+        });
+      }
     }
 
     res.status(200).json({ 
@@ -456,6 +485,18 @@ const acceptWorkRequest = async(req, res) => {
       }
     });
 
+    // Get worker details for email
+    const worker = await prisma.users.findUnique({
+      where: { id: workerId },
+      select: { full_name: true }
+    });
+
+    // Get address string from included address
+    const orderAddress = updatedOrder.addresses;
+    const addressString = orderAddress ? 
+      `${orderAddress.street || ''}, ${orderAddress.city || ''}, ${orderAddress.district || ''}`.replace(/^, |, $/g, '') : 
+      'Not specified';
+
     // Create a notification for the client
     await prisma.notifications.create({
       data: {
@@ -465,6 +506,19 @@ const acceptWorkRequest = async(req, res) => {
         is_read: false
       }
     });
+
+    // Send acceptance email to client
+    const clientData = updatedOrder.users_orders_client_idTousers;
+    if (clientData && clientData.email) {
+      await sendRequestAcceptedEmail({
+        clientEmail: clientData.email,
+        clientName: clientData.full_name,
+        workerName: worker?.full_name || 'Worker',
+        address: addressString,
+        description: order.description,
+        selectedTime: order.scheduled_at
+      });
+    }
 
     res.status(200).json({ 
       message: 'Work request accepted successfully',
