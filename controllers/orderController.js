@@ -412,7 +412,6 @@ const getWorkerHirings = async (req, res) => {
 
 const getWorkerRequests = async (req, res) => {
      const { email } = req.params;
-console.log(email);
 
      try {
           const worker = await prisma.users.findUnique({
@@ -464,12 +463,27 @@ console.log(email);
 
 const acceptRequest = async (req, res) => {
      const { orderId } = req.params;
-     const { workerId } = req.body;
+     const { workerEmail } = req.body;
+
+     console.log(orderId, "Email: ", workerEmail);
+     
 
      try {
-          if (!orderId || !workerId) {
-               return res.status(400).json({ error: 'Order ID and Worker ID are required' });
+          if (!orderId || !workerEmail) {
+               return res.status(400).json({ error: 'Order ID and Worker Email are required' });
           }
+
+          // Lookup worker by email
+          const worker = await prisma.users.findUnique({
+               where: { email: workerEmail },
+               select: { id: true }
+          });
+
+          if (!worker) {
+               return res.status(404).json({ error: 'Worker not found with provided email' });
+          }
+
+          const workerId = worker.id;
 
           const order = await prisma.orders.findUnique({ where: { id: orderId } });
 
@@ -492,12 +506,6 @@ const acceptRequest = async (req, res) => {
                     status: 'accepted',
                     updated_at: new Date()
                },
-               include: {
-                    users_orders_client_idTousers: {
-                         select: { id: true, full_name: true, email: true }
-                    },
-                    addresses: true
-               }
           });
 
           // Notify client
@@ -510,7 +518,7 @@ const acceptRequest = async (req, res) => {
                }
           });
 
-          res.status(200).json({ message: 'Work request accepted successfully', order: updatedOrder });
+          res.status(200).json({ message: 'Work request accepted successfully' });
      } catch (error) {
           console.error('Error accepting work request:', error);
           res.status(500).json({ error: 'Internal Server Error' });
@@ -519,12 +527,28 @@ const acceptRequest = async (req, res) => {
 
 const cancelRequest = async (req, res) => {
      const { orderId } = req.params;
-     const { workerId, reason } = req.body;
+     const { workerEmail, reason } = req.body;
 
      try {
-          if (!orderId || !workerId) {
-               return res.status(400).json({ error: 'Order ID and Worker ID are required' });
+          if (!orderId || !workerEmail) {
+               return res.status(400).json({ error: 'Order ID and Worker Email are required' });
           }
+
+          if (!reason || reason.trim() === '') {
+               return res.status(400).json({ error: 'Cancellation reason is required' });
+          }
+
+          // Lookup worker by email
+          const worker = await prisma.users.findUnique({
+               where: { email: workerEmail },
+               select: { id: true }
+          });
+
+          if (!worker) {
+               return res.status(404).json({ error: 'Worker not found with provided email' });
+          }
+
+          const workerId = worker.id;
 
           const order = await prisma.orders.findUnique({ where: { id: orderId } });
 
@@ -545,6 +569,8 @@ const cancelRequest = async (req, res) => {
                where: { id: orderId },
                data: {
                     status: 'cancelled',
+                    cancel_reason: reason,
+                    canceled_by: 'worker',
                     updated_at: new Date()
                }
           });
@@ -554,7 +580,7 @@ const cancelRequest = async (req, res) => {
                data: {
                     user_id: order.client_id,
                     title: 'Work Request Cancelled',
-                    body: `The worker has cancelled the work request. Reason: ${reason || 'No reason provided'}`,
+                    body: `The worker has cancelled the work request. Reason: ${reason}`,
                     is_read: false
                }
           });

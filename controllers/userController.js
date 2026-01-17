@@ -193,8 +193,7 @@ const getUserData = async (req, res) => {
      try {
           const user = await prisma.users.findUnique({
                where: {
-                    email,
-                    role: 'client'
+                    email
                },
                include: {
                     addresses: true
