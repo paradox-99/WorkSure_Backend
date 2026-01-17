@@ -70,7 +70,7 @@ const getSummaryCards = async (workerId) => {
                 lte: endOfDay
             },
             status: {
-                notIn: ['cancelled', 'cart']
+                notIn: ['cancelled', 'cart', 'completed', 'pending']
             }
         }
     });
@@ -214,45 +214,6 @@ const getUpcomingWorks = async (workerId, limit = 10) => {
 };
 
 /**
- * Get calendar summary for upcoming days
- * @param {string} workerId 
- * @param {number} days 
- * @returns {Promise<Array>}
- */
-const getUpcomingDays = async (workerId, days = 7) => {
-    const MAX_DAILY_SLOTS = 8;
-    const result = [];
-    
-    for (let i = 0; i < days; i++) {
-        const date = new Date();
-        date.setDate(date.getDate() + i);
-        const { startOfDay, endOfDay } = getDayBounds(date);
-        
-        const totalAppointments = await prisma.orders.count({
-            where: {
-                assigned_worker_id: workerId,
-                selected_time: {
-                    gte: startOfDay,
-                    lte: endOfDay
-                },
-                status: {
-                    notIn: ['cancelled', 'cart']
-                }
-            }
-        });
-        
-        result.push({
-            date: startOfDay.toISOString().split('T')[0],
-            day_name: startOfDay.toLocaleDateString('en-US', { weekday: 'short' }),
-            total_appointments: totalAppointments,
-            available_slots: Math.max(0, MAX_DAILY_SLOTS - totalAppointments)
-        });
-    }
-    
-    return result;
-};
-
-/**
  * Get pending service requests for worker
  * @param {string} workerId 
  * @param {number} limit 
@@ -309,7 +270,6 @@ const getDashboardOverview = async (workerId) => {
         getSummaryCards(workerId),
         getTodaysWorks(workerId),
         getUpcomingWorks(workerId),
-        getUpcomingDays(workerId),
         getServiceRequests(workerId)
     ]);
     
@@ -327,6 +287,5 @@ module.exports = {
     getSummaryCards,
     getTodaysWorks,
     getUpcomingWorks,
-    getUpcomingDays,
     getServiceRequests
 };

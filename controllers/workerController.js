@@ -241,6 +241,9 @@ const updateAvailability = async (req, res) => {
 const getWorkerDetails = async (req, res) => {
   const { workerId } = req.params;
 
+  console.log(workerId);
+  
+
   try {
     // Fetch worker details with all related information
     const workerDetails = await prisma.users.findUnique({
@@ -250,6 +253,7 @@ const getWorkerDetails = async (req, res) => {
         email: true,
         phone: true,
         full_name: true,
+        role: true,
         gender: true,
         profile_picture: true, 
         // Worker profile
@@ -319,12 +323,12 @@ const getWorkerDetails = async (req, res) => {
     if (!workerDetails) {
       return res.status(404).json({ error: 'Worker not found' });
     }
-
+    
     // Check if user is actually a worker
     if (workerDetails.role !== 'worker') {
       return res.status(400).json({ error: 'User is not a worker' });
     }
-
+    
     res.status(200).json(workerDetails);
   } catch (error) {
     console.error('Error fetching worker details:', error);
