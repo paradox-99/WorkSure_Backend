@@ -1,5 +1,7 @@
 const prisma = require("../config/prisma");
+
 const { sendRequestAcceptedEmail, sendRequestCancelledEmail } = require("./mailController");
+const { getDashboardOverview, getSummaryOnly, getTasksAndRequests } = require("../services/workerDashboardService");
 
 const getWorkers = async (req, res) => {
      try {
@@ -241,6 +243,9 @@ const updateAvailability = async (req, res) => {
 const getWorkerDetails = async (req, res) => {
   const { workerId } = req.params;
 
+  console.log(workerId);
+  
+
   try {
     // Fetch worker details with all related information
     const workerDetails = await prisma.users.findUnique({
@@ -250,13 +255,9 @@ const getWorkerDetails = async (req, res) => {
         email: true,
         phone: true,
         full_name: true,
-        gender: true,
         role: true,
-        date_of_birth: true,
+        gender: true,
         profile_picture: true, 
-        created_at: true,
-        last_login_at: true,
-        is_active: true,
         // Worker profile
         worker_profiles: {
           select: {
@@ -265,10 +266,6 @@ const getWorkerDetails = async (req, res) => {
             years_experience: true,
             avg_rating: true,
             total_reviews: true,
-            verification: true,
-            documents_count: true,
-            created_at: true,
-            updated_at: true
           }
         },
         // Services offered by worker
@@ -278,7 +275,6 @@ const getWorkerDetails = async (req, res) => {
             base_price: true,
             price_unit: true,
             skills: true,
-            created_at: true,
             service_categories: {
               select: {
                 id: true,
@@ -306,8 +302,6 @@ const getWorkerDetails = async (req, res) => {
             city: true,
             district: true,
             postal_code: true,
-            lat: true,
-            lon: true
           }
         },
         // Reviews received by worker
@@ -316,7 +310,6 @@ const getWorkerDetails = async (req, res) => {
             id: true,
             rating: true,
             comment: true,
-            created_at: true,
             users_reviews_reviewer_idTousers: {
               select: {
                 id: true,
@@ -332,12 +325,12 @@ const getWorkerDetails = async (req, res) => {
     if (!workerDetails) {
       return res.status(404).json({ error: 'Worker not found' });
     }
-
+    
     // Check if user is actually a worker
     if (workerDetails.role !== 'worker') {
       return res.status(400).json({ error: 'User is not a worker' });
     }
-
+    
     res.status(200).json(workerDetails);
   } catch (error) {
     console.error('Error fetching worker details:', error);
@@ -538,4 +531,243 @@ const acceptWorkRequest = async(req, res) => {
   }
 }
 
-module.exports = { getWorkers, searchWorkers, createWorker, createWorkerService, createWorkerAvailability, updateWorkerProfile, updateWorkerService, updateAvailability, getWorkerDetails, cancelWorkRequest, acceptWorkRequest };
+/**
+ * Get Worker Dashboard Summary Cards Only
+ * Returns only the summary card data for the worker dashboard
+ * @route GET /api/workerRoutes/dashboard/summary/:email
+ */
+const getWorkerDashboardSummary = async (req, res) => {
+  try {
+    const { email } = req.params;
+    
+    if (!email) {
+      return res.status(400).json({ 
+        error: 'Email is required' 
+      });
+    }
+
+    // Fetch worker by email
+    const worker = await prisma.users.findUnique({
+      where: { email: email },
+      select: { id: true, role: true, full_name: true }
+    });
+
+    if (!worker) {
+      return res.status(404).json({ error: 'Worker not found' });
+    }
+
+    if (worker.role !== 'worker') {
+      return res.status(403).json({ 
+        error: 'Access denied. This endpoint is only accessible to workers.' 
+      });
+    }
+
+    const workerId = worker.id;
+
+    // Get summary cards data only
+    const summaryData = await getSummaryOnly(workerId);
+
+    res.status(200).json({
+      success: true,
+      worker_name: worker.full_name,
+      ...summaryData
+    });
+
+  } catch (error) {
+    console.error('Error fetching worker dashboard summary:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch summary data',
+      message: error.message 
+    });
+  }
+};
+
+/**
+ * Get Worker Dashboard Tasks and Requests
+ * Returns today's works, upcoming works, and service requests
+ * @route GET /api/workerRoutes/dashboard/tasks/:email
+ */
+const getWorkerDashboardTasks = async (req, res) => {
+  try {
+    const { email } = req.params;
+    
+    if (!email) {
+      return res.status(400).json({ 
+        error: 'Email is required' 
+      });
+    }
+
+    // Fetch worker by email
+    const worker = await prisma.users.findUnique({
+      where: { email: email },
+      select: { id: true, role: true, full_name: true }
+    });
+
+    if (!worker) {
+      return res.status(404).json({ error: 'Worker not found' });
+    }
+
+    if (worker.role !== 'worker') {
+      return res.status(403).json({ 
+        error: 'Access denied. This endpoint is only accessible to workers.' 
+      });
+    }
+
+    const workerId = worker.id;
+
+    // Get tasks and requests data
+    const tasksData = await getTasksAndRequests(workerId);
+
+    res.status(200).json({
+      success: true,
+      worker_name: worker.full_name,
+      ...tasksData
+    });
+
+  } catch (error) {
+    console.error('Error fetching worker dashboard tasks:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch tasks data',
+      message: error.message 
+    });
+  }
+};
+
+/**
+ * Get Worker Details by Email
+ * Returns worker profile and related information for dashboard
+ * @route GET /api/workerRoutes/dashboard/details/:email
+ */
+const getWorkerDetailsByEmail = async (req, res) => {
+  const { email } = req.params;
+
+  console.log(email);
+  
+
+  try {
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    // Fetch worker details with all related information
+    const workerDetails = await prisma.users.findUnique({
+      where: { email: email },
+      select: {
+        id: true,
+        email: true,
+        phone: true,
+        full_name: true,
+        gender: true,
+        role: true,
+        date_of_birth: true,
+        profile_picture: true,
+        created_at: true,
+        last_login_at: true,
+        is_active: true,
+        // Worker profile
+        worker_profiles: {
+          select: {
+            display_name: true,
+            bio: true,
+            years_experience: true,
+            avg_rating: true,
+            total_reviews: true,
+            verification: true,
+            documents_count: true,
+            created_at: true,
+            updated_at: true
+          }
+        },
+        // Services offered by worker
+        worker_services: {
+          select: {
+            id: true,
+            base_price: true,
+            price_unit: true,
+            skills: true,
+            created_at: true,
+            service_categories: {
+              select: {
+                id: true,
+                name: true,
+                slug: true,
+                description: true
+              }
+            },
+            service_sections: {
+              select: {
+                id: true,
+                name: true,
+                slug: true,
+                description: true
+              }
+            }
+          }
+        },
+        // Availability
+        availabilities: {
+          select: {
+            id: true,
+            available_from: true,
+            available_to: true,
+            weekend: true
+          }
+        },
+        // Addresses
+        addresses: {
+          select: {
+            id: true,
+            street: true,
+            city: true,
+            district: true,
+            postal_code: true,
+            lat: true,
+            lon: true
+          }
+        },
+        // Reviews received by worker
+        reviews_reviews_worker_idTousers: {
+          select: {
+            id: true,
+            rating: true,
+            comment: true,
+            created_at: true,
+            users_reviews_reviewer_idTousers: {
+              select: {
+                id: true,
+                full_name: true,
+                profile_picture: true
+              }
+            }
+          },
+          orderBy: {
+            created_at: 'desc'
+          },
+          take: 10
+        }
+      }
+    });
+
+    if (!workerDetails) {
+      return res.status(404).json({ error: 'Worker not found' });
+    }
+
+    // Check if user is actually a worker
+    if (workerDetails.role !== 'worker') {
+      return res.status(403).json({ error: 'User is not a worker' });
+    }
+
+    // console.log(workerDetails);
+    
+
+    res.status(200).json({
+      success: true,
+      data: workerDetails
+    });
+  } catch (error) {
+    console.error('Error fetching worker details by email:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+};
+
+module.exports = { getWorkers, searchWorkers, createWorker, createWorkerService, createWorkerAvailability, updateWorkerProfile, updateWorkerService, updateAvailability, getWorkerDetails, cancelWorkRequest, acceptWorkRequest, getWorkerDashboardSummary, getWorkerDashboardTasks, getWorkerDetailsByEmail };

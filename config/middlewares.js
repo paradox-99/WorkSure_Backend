@@ -1,6 +1,7 @@
 const connectDB = require('./db');
 const jwt = require('jsonwebtoken');
 const dotenv = require('dotenv');
+const prisma = require('./prisma');
 
 dotenv.config();
 
@@ -27,6 +28,34 @@ const verifyToken = async (req, res, next) => {
         next();
     })
 }
+
+const verifyWorker = async (req, res, next) => {
+    try {
+        const userId = req.user?.id;
+        
+        if (!userId) {
+            return res.status(401).json({ message: 'User ID not found in token' });
+        }
+
+        const user = await prisma.users.findUnique({
+            where: { id: userId },
+            select: { id: true, role: true }
+        });
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        if (user.role !== 'worker') {
+            return res.status(403).json({ message: 'Forbidden: Worker access required' });
+        }
+
+        next();
+    } catch (error) {
+        console.error('Error verifying worker:', error);
+        return res.status(500).json({ message: 'Internal server error' });
+    }
+};
 
 const verifyUser = async (req, res, next) => {
     const email = req.user.email;
@@ -90,4 +119,4 @@ const verifyAdmin = async (req, res, next) => {
     })
 }
 
-module.exports = { generateToken, verifyToken, verifyUser, verifyAgency, verifyAdmin };
+module.exports = { generateToken, verifyToken, verifyUser, verifyAgency, verifyAdmin, verifyWorker };
