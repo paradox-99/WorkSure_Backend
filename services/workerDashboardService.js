@@ -253,8 +253,6 @@ const getServiceRequests = async (workerId, limit = 10) => {
         },
         take: limit
     });
-
-    console.log("test: ", orders);
     
     return orders.map(order => ({
         request_id: order.id,

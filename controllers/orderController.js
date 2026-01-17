@@ -3,7 +3,6 @@ const { sendHiringRequestEmail } = require("./mailController");
 
 const createOrder = async (req, res) => {
      const { client_email, worker_id, selected_time, address, description } = req.body;
-     console.log(client_email);
 
      try {
           // Fetch client_id from users table using client_email
@@ -252,9 +251,6 @@ const updateOrderStatus = async (req, res) => {
 const cancelOrder = async (req, res) => {
      const { orderId } = req.params;
 
-     console.log(orderId);
-
-
      try {
           const order = await prisma.orders.findUnique({
                where: { id: orderId },
@@ -297,7 +293,6 @@ const cancelOrder = async (req, res) => {
 
 const getUserOrder = async (req, res) => {
      const { email } = req.params;
-     console.log(email);
 
      try {
 
@@ -464,10 +459,7 @@ const getWorkerRequests = async (req, res) => {
 const acceptRequest = async (req, res) => {
      const { orderId } = req.params;
      const { workerEmail } = req.body;
-
-     console.log(orderId, "Email: ", workerEmail);
      
-
      try {
           if (!orderId || !workerEmail) {
                return res.status(400).json({ error: 'Order ID and Worker Email are required' });
@@ -592,6 +584,83 @@ const cancelRequest = async (req, res) => {
      }
 };
 
+const startWork = async (req, res) => {
+     const { orderId } = req.params;
+     const { workerEmail } = req.body;
+
+     try {
+          if (!orderId || !workerEmail) {
+               return res.status(400).json({ error: 'Order ID and Worker Email are required' });
+          }
+
+          const order = await prisma.orders.findUnique({
+               where: { id: orderId }
+          });
+
+          if (!order) {
+               return res.status(404).json({ error: 'Order not found' });
+          }
+
+          const worker = await prisma.users.findUnique({
+               where: { email: workerEmail },
+               select: { id: true }
+          });
+
+          if (!worker) {
+               return res.status(404).json({ error: 'Worker not found with provided email' });
+          }
+
+          const workerId = worker.id;
+
+          if (order.assigned_worker_id !== workerId) {
+               return res.status(403).json({ error: 'Worker is not assigned to this order' });
+          }
+
+          if (order.status !== 'accepted') {
+               return res.status(400).json({ error: `Order with status '${order.status}' cannot be started. Order must be accepted first.` });
+          }
+
+          const startTime = new Date();
+
+          const updatedOrder = await prisma.orders.update({
+               where: { id: orderId },
+               data: {
+                    status: 'in_progress',
+                    work_start: startTime,
+                    updated_at: startTime
+               },
+               include: {
+                    users_orders_client_idTousers: {
+                         select: {
+                              id: true,
+                              full_name: true,
+                              email: true
+                         }
+                    }
+               }
+          });
+
+          // Notify client that work has started
+          await prisma.notifications.create({
+               data: {
+                    user_id: order.client_id,
+                    title: 'Work Started',
+                    body: 'The worker has started working on your request.',
+                    is_read: false
+               }
+          });
+
+          res.status(200).json({
+               message: 'Work started successfully',
+               order: updatedOrder,
+               work_start: startTime
+          });
+     } catch (error) {
+          console.error('Error starting work:', error);
+          res.status(500).json({ error: 'Internal Server Error' });
+     }
+};
+
 module.exports = {
      createOrder,
      getOrders,
@@ -602,7 +671,8 @@ module.exports = {
      getWorkerHirings,
      getWorkerRequests,
      acceptRequest,
-     cancelRequest
+     cancelRequest,
+     startWork
 };
 
 

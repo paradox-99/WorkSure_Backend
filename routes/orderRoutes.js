@@ -6,7 +6,8 @@ const {
   getOrderById,
   updateOrderStatus,
   cancelOrder,
-  getUserOrder
+  getUserOrder,
+  startWork
 } = require('../controllers/orderController');
 
 const { acceptRequest, cancelRequest } = require('../controllers/orderController');
@@ -32,5 +33,8 @@ router.patch('/acceptWorkRequest/:orderId', acceptRequest);
 
 // Worker cancels a work request
 router.patch('/cancelWorkRequest/:orderId', cancelRequest);
+
+// Worker starts work on an accepted order
+router.patch('/startWork/:orderId', startWork);
 
 module.exports = router;
