@@ -65,10 +65,10 @@ const getSummaryCards = async (workerId) => {
     const todaysAppointments = await prisma.orders.count({
         where: {
             assigned_worker_id: workerId,
-            selected_time: {
-                gte: startOfDay,
-                lte: endOfDay
-            },
+            // selected_time: {
+            //     gte: startOfDay,
+            //     lte: endOfDay
+            // },
             status: {
                 in: ['accepted', 'in_progress']
             }
@@ -124,10 +124,10 @@ const getTodaysWorks = async (workerId) => {
     const orders = await prisma.orders.findMany({
         where: {
             assigned_worker_id: workerId,
-            selected_time: {
-                gte: startOfDay,
-                lte: endOfDay
-            },
+            // selected_time: {
+            //     gte: startOfDay,
+            //     lte: endOfDay
+            // },
             status: {
                 in: ['accepted', 'in_progress']
             }
@@ -253,8 +253,6 @@ const getServiceRequests = async (workerId, limit = 10) => {
         },
         take: limit
     });
-
-    console.log("test: ", orders);
     
     return orders.map(order => ({
         request_id: order.id,
@@ -277,6 +275,8 @@ const getServiceRequests = async (workerId, limit = 10) => {
  */
 const getSummaryOnly = async (workerId) => {
     const summary = await getSummaryCards(workerId);
+    console.log(summary);
+    
     return { summary };
 };
 

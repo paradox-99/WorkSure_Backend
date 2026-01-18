@@ -2,8 +2,7 @@ const prisma = require("../config/prisma");
 const { sendHiringRequestEmail } = require("./mailController");
 
 const createOrder = async (req, res) => {
-     const { client_email, worker_id, selected_time, address, description } = req.body;
-     console.log(client_email);
+     const { client_email, worker_id, selected_time, address, description, total_amount } = req.body;
 
      try {
           // Fetch client_id from users table using client_email
@@ -37,7 +36,8 @@ const createOrder = async (req, res) => {
                     address,
                     description: description || null,
                     status: "pending",
-                    payment_completed: false
+                    payment_completed: false,
+                    total_amount: total_amount || 0.0
                }
           });
 
@@ -252,9 +252,6 @@ const updateOrderStatus = async (req, res) => {
 const cancelOrder = async (req, res) => {
      const { orderId } = req.params;
 
-     console.log(orderId);
-
-
      try {
           const order = await prisma.orders.findUnique({
                where: { id: orderId },
@@ -297,7 +294,6 @@ const cancelOrder = async (req, res) => {
 
 const getUserOrder = async (req, res) => {
      const { email } = req.params;
-     console.log(email);
 
      try {
 
@@ -464,10 +460,7 @@ const getWorkerRequests = async (req, res) => {
 const acceptRequest = async (req, res) => {
      const { orderId } = req.params;
      const { workerEmail } = req.body;
-
-     console.log(orderId, "Email: ", workerEmail);
      
-
      try {
           if (!orderId || !workerEmail) {
                return res.status(400).json({ error: 'Order ID and Worker Email are required' });
@@ -592,6 +585,261 @@ const cancelRequest = async (req, res) => {
      }
 };
 
+const startWork = async (req, res) => {
+     const { orderId } = req.params;
+     const { workerEmail } = req.body;
+
+     try {
+          if (!orderId || !workerEmail) {
+               return res.status(400).json({ error: 'Order ID and Worker Email are required' });
+          }
+
+          const order = await prisma.orders.findUnique({
+               where: { id: orderId }
+          });
+
+          if (!order) {
+               return res.status(404).json({ error: 'Order not found' });
+          }
+
+          const worker = await prisma.users.findUnique({
+               where: { email: workerEmail },
+               select: { id: true }
+          });
+
+          if (!worker) {
+               return res.status(404).json({ error: 'Worker not found with provided email' });
+          }
+
+          const workerId = worker.id;
+
+          if (order.assigned_worker_id !== workerId) {
+               return res.status(403).json({ error: 'Worker is not assigned to this order' });
+          }
+
+          if (order.status !== 'accepted') {
+               return res.status(400).json({ error: `Order with status '${order.status}' cannot be started. Order must be accepted first.` });
+          }
+
+          const startTime = new Date();
+
+          const updatedOrder = await prisma.orders.update({
+               where: { id: orderId },
+               data: {
+                    status: 'in_progress',
+                    work_start: startTime,
+                    updated_at: startTime
+               },
+               include: {
+                    users_orders_client_idTousers: {
+                         select: {
+                              id: true,
+                              full_name: true,
+                              email: true
+                         }
+                    }
+               }
+          });
+
+          // Notify client that work has started
+          await prisma.notifications.create({
+               data: {
+                    user_id: order.client_id,
+                    title: 'Work Started',
+                    body: 'The worker has started working on your request.',
+                    is_read: false
+               }
+          });
+
+          res.status(200).json({
+               message: 'Work started successfully',
+               order: updatedOrder,
+               work_start: startTime
+          });
+     } catch (error) {
+          console.error('Error starting work:', error);
+          res.status(500).json({ error: 'Internal Server Error' });
+     }
+};
+
+const getStartTime = async (req, res) => {
+     const {orderId } = req.params;
+
+     try {
+          const order = await prisma.orders.findUnique({
+               where: { id: orderId },
+               select: { work_start: true }
+          });
+
+          if (!order) {
+               return null;
+          }
+
+          res.status(200).json({ work_start: order.work_start });
+     }
+     catch (error) {
+          console.error('Error fetching work start time:', error);
+          res.status(500).json({ error: 'Internal Server Error' });
+     }
+}
+
+const addExtraItem = async (req, res) => {
+     const { orderId } = req.params;
+     const { items, additional_notes } = req.body;
+     const endTime = new Date();
+
+     const additional_price = items[0].total_price;
+     
+
+     try {
+          // Check if order exists
+          const order = await prisma.orders.findUnique({
+               where: { id: orderId },
+               select: { total_amount: true, status: true }
+          });
+
+          if (!order) {
+               return res.status(404).json({ error: "Order not found" });
+          }
+
+          // Check if order is in a valid state for adding items
+          if (order.status === "completed" || order.status === "cancelled") {
+               return res.status(400).json({ 
+                    error: "Cannot add items to a completed or cancelled order" 
+               });
+          }
+
+          // Create the order item
+          const orderItem = await prisma.order_items.create({
+               data: {
+                    order_id: orderId,
+                    items: items,
+                    additional_notes: additional_notes || "No items needed.",
+                    verified: false
+               }
+          });
+
+
+          const total_amount = parseInt(order.total_amount) + additional_price;
+
+          await prisma.orders.update({
+               where: { id: orderId },
+               data: {
+                    work_end: endTime,
+                    status: "awaiting",
+                    updated_at: endTime,
+                    items_approval: false,
+                    total_amount: total_amount
+               }
+          });
+
+          res.status(201).json({
+               message: "Extra item added successfully",
+               orderItem
+          });
+     } catch (error) {
+          console.error("Error adding extra item:", error);
+
+          if (error.code === "P2025") {
+               return res.status(404).json({ error: "Order not found" });
+          }
+
+          res.status(500).json({ error: "Internal Server Error" });
+     }
+};
+
+const acceptExtraItems = async (req, res) => {
+     const { orderId } = req.params;
+
+     try {
+          // Check if order exists
+          const order = await prisma.orders.findUnique({
+               where: { id: orderId }
+          });
+
+          if (!order) {
+               return res.status(404).json({ error: "Order not found" });
+          }
+
+          // Update order items to verified
+          await prisma.order_items.updateMany({
+               where: { 
+                    order_id: orderId,
+                    verified: false
+               },
+               data: {
+                    verified: true,
+                    updated_at: new Date()
+               }
+          });
+
+          // Update order items_approval to true
+          await prisma.orders.update({
+               where: { id: orderId },
+               data: {
+                    items_approval: true,
+                    status: "completed",
+                    updated_at: new Date()
+               }
+          });
+
+          res.status(200).json({
+               message: "Extra items accepted successfully"
+          });
+     } catch (error) {
+          console.error("Error accepting extra items:", error);
+
+          if (error.code === "P2025") {
+               return res.status(404).json({ error: "Order not found" });
+          }
+
+          res.status(500).json({ error: "Internal Server Error" });
+     }
+};
+
+const getAwaitingWorkDetails = async (req, res) => {
+     const { orderId } = req.params;
+
+     try {
+          // Fetch order with total amount
+          const order = await prisma.orders.findUnique({
+               where: { id: orderId },
+               select: {
+                    id: true,
+                    total_amount: true,
+                    status: true,
+                    items_approval: true,
+                    order_items: {
+                         select: {
+                              id: true,
+                              items: true,
+                              additional_notes: true,
+                              verified: true,
+                              created_at: true
+                         }
+                    }
+               }
+          });
+
+          if (!order) {
+               return res.status(404).json({ error: "Order not found" });
+          }
+
+
+          res.status(200).json({
+               order
+          });
+     } catch (error) {
+          console.error("Error fetching awaiting work details:", error);
+
+          if (error.code === "P2025") {
+               return res.status(404).json({ error: "Order not found" });
+          }
+
+          res.status(500).json({ error: "Internal Server Error" });
+     }
+};
+
 module.exports = {
      createOrder,
      getOrders,
@@ -602,7 +850,12 @@ module.exports = {
      getWorkerHirings,
      getWorkerRequests,
      acceptRequest,
-     cancelRequest
+     cancelRequest,
+     startWork,
+     getStartTime,
+     addExtraItem,
+     acceptExtraItems,
+     getAwaitingWorkDetails
 };
 
 

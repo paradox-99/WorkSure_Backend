@@ -16,7 +16,6 @@ const generateToken = (user, res) => {
 
 const verifyToken = async (req, res, next) => {
     const token = req.cookies?.accessToken;
-    console.log("token from verify: ", token);
 
     if (!token)
         return res.status(401).send({ message: "Unauthorized" })
