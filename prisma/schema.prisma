@@ -248,7 +248,7 @@ enum booking_status {
   in_progress
   completed
   cancelled
-  no_show
+  awaiting
   disputed
 }
 
