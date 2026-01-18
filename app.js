@@ -6,6 +6,7 @@ const userRoutes = require('./routes/userRoutes');
 const workerRoutes = require('./routes/workerRoutes');
 const orderRoutes = require('./routes/orderRoutes');
 const mailRoutes = require('./routes/mailRoutes');
+const paymentRoutes = require('./routes/paymentRoutes');
 
 const app = express();
 
@@ -24,5 +25,6 @@ app.use('/api/userRoutes', userRoutes);
 app.use('/api/workerRoutes', workerRoutes);
 app.use('/api/orderRoutes', orderRoutes);
 app.use('/api/mail', mailRoutes);
+app.use('/api/paymentRoutes', paymentRoutes);
 
 module.exports = app;
