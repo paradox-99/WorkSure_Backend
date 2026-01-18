@@ -65,6 +65,7 @@ model orders {
   payment_completed                      Boolean?
   cancel_reason                          String?
   canceled_by                            String?
+  items_approval                         Boolean?
   order_items                            order_items[]
   users_orders_assigned_worker_idTousers users?         @relation("orders_assigned_worker_idTousers", fields: [assigned_worker_id], references: [id], onUpdate: NoAction)
   users_orders_client_idTousers          users?         @relation("orders_client_idTousers", fields: [client_id], references: [id], onUpdate: NoAction)

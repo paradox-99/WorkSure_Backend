@@ -65,10 +65,10 @@ const getSummaryCards = async (workerId) => {
     const todaysAppointments = await prisma.orders.count({
         where: {
             assigned_worker_id: workerId,
-            selected_time: {
-                gte: startOfDay,
-                lte: endOfDay
-            },
+            // selected_time: {
+            //     gte: startOfDay,
+            //     lte: endOfDay
+            // },
             status: {
                 in: ['accepted', 'in_progress']
             }
@@ -124,10 +124,10 @@ const getTodaysWorks = async (workerId) => {
     const orders = await prisma.orders.findMany({
         where: {
             assigned_worker_id: workerId,
-            selected_time: {
-                gte: startOfDay,
-                lte: endOfDay
-            },
+            // selected_time: {
+            //     gte: startOfDay,
+            //     lte: endOfDay
+            // },
             status: {
                 in: ['accepted', 'in_progress']
             }

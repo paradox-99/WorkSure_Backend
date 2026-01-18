@@ -8,7 +8,8 @@ const {
   cancelOrder,
   getUserOrder,
   startWork,
-  getStartTime
+  getStartTime,
+  addExtraItem
 } = require('../controllers/orderController');
 
 const { acceptRequest, cancelRequest } = require('../controllers/orderController');
@@ -38,5 +39,8 @@ router.patch('/cancelWorkRequest/:orderId', cancelRequest);
 // Worker starts work on an accepted order
 router.patch('/startWork/:orderId', startWork);
 router.get('/getStartTime/:orderId', getStartTime);
+
+// Add extra item to an order
+router.post('/orders/:orderId/items', addExtraItem);
 
 module.exports = router;

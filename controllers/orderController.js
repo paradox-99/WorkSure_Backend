@@ -682,6 +682,52 @@ const getStartTime = async (req, res) => {
      }
 }
 
+const addExtraItem = async (req, res) => {
+     const { orderId } = req.params;
+     const { items, additional_notes } = req.body;
+
+     try {
+          // Check if order exists
+          const order = await prisma.orders.findUnique({
+               where: { id: orderId }
+          });
+
+          if (!order) {
+               return res.status(404).json({ error: "Order not found" });
+          }
+
+          // Check if order is in a valid state for adding items
+          if (order.status === "completed" || order.status === "cancelled") {
+               return res.status(400).json({ 
+                    error: "Cannot add items to a completed or cancelled order" 
+               });
+          }
+
+          // Create the order item
+          const orderItem = await prisma.order_items.create({
+               data: {
+                    order_id: orderId,
+                    items: items,
+                    additional_notes: additional_notes || null,
+                    verified: false
+               }
+          });
+
+          res.status(201).json({
+               message: "Extra item added successfully",
+               orderItem
+          });
+     } catch (error) {
+          console.error("Error adding extra item:", error);
+
+          if (error.code === "P2025") {
+               return res.status(404).json({ error: "Order not found" });
+          }
+
+          res.status(500).json({ error: "Internal Server Error" });
+     }
+};
+
 module.exports = {
      createOrder,
      getOrders,
@@ -694,7 +740,8 @@ module.exports = {
      acceptRequest,
      cancelRequest,
      startWork,
-     getStartTime
+     getStartTime,
+     addExtraItem
 };
 
 
