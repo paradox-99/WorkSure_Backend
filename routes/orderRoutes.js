@@ -9,7 +9,9 @@ const {
   getUserOrder,
   startWork,
   getStartTime,
-  addExtraItem
+  addExtraItem,
+  acceptExtraItems,
+  getAwaitingWorkDetails
 } = require('../controllers/orderController');
 
 const { acceptRequest, cancelRequest } = require('../controllers/orderController');
@@ -41,6 +43,12 @@ router.patch('/startWork/:orderId', startWork);
 router.get('/getStartTime/:orderId', getStartTime);
 
 // Add extra item to an order
-router.post('/orders/:orderId/items', addExtraItem);
+router.post('/orderItems/:orderId', addExtraItem);
+
+// User accepts extra items for an order
+router.patch('/orderItems/:orderId/accept', acceptExtraItems);
+
+// Get awaiting work details with total price and extra items price
+router.get('/orders/:orderId/awaitingDetails', getAwaitingWorkDetails);
 
 module.exports = router;

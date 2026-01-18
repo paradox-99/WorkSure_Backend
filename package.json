@@ -14,12 +14,12 @@
   "dependencies": {
     "@prisma/adapter-pg": "^7.1.0",
     "@prisma/client": "^7.1.0",
-    "node-mailjet": "^3.3.1",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.2",
+    "node-mailjet": "^3.3.1",
     "pg": "^8.16.3",
     "sslcommerz-lts": "^1.2.0"
   },
