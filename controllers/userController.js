@@ -187,8 +187,6 @@ const updateUser = async (req, res) => {
 
 const getUserData = async (req, res) => {
      const { email } = req.params;
-     console.log(email);
-     
 
      try {
           const user = await prisma.users.findUnique({

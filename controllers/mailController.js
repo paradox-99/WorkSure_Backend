@@ -5,7 +5,6 @@ dotenv.config();
 exports.sendTest = async (req, res) => {
   const { ToEmail, ToName, Subject, TextPart, HTMLPart } = req.body || {};
 
-  console.log(process.env.MJ_APIKEY_PUBLIC, process.env.MJ_APIKEY_PRIVATE);
   const emailFrom = process.env.FROM_EMAIL
 
   const message = {
@@ -109,7 +108,6 @@ exports.sendHiringRequestEmail = async ({ workerEmail, workerName, clientName, a
 
   try {
     const request = await mj.post('send', { version: 'v3.1' }).request(message);
-    console.log('Hiring request email sent successfully to:', workerEmail);
     return { ok: true, data: request.body };
   } catch (err) {
     console.error('Mailjet error sending hiring request email:', {
@@ -189,7 +187,6 @@ exports.sendRequestAcceptedEmail = async ({ clientEmail, clientName, workerName,
 
   try {
     const request = await mj.post('send', { version: 'v3.1' }).request(message);
-    console.log('Request accepted email sent successfully to:', clientEmail);
     return { ok: true, data: request.body };
   } catch (err) {
     console.error('Mailjet error sending request accepted email:', {
@@ -271,7 +268,6 @@ exports.sendRequestCancelledEmail = async ({ clientEmail, clientName, workerName
 
   try {
     const request = await mj.post('send', { version: 'v3.1' }).request(message);
-    console.log('Request cancelled email sent successfully to:', clientEmail);
     return { ok: true, data: request.body };
   } catch (err) {
     console.error('Mailjet error sending request cancelled email:', {

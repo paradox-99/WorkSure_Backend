@@ -1,7 +1,7 @@
 const prisma = require("../config/prisma");
 
 const { sendRequestAcceptedEmail, sendRequestCancelledEmail } = require("./mailController");
-const { getDashboardOverview, getSummaryOnly, getTasksAndRequests } = require("../services/workerDashboardService");
+const { getSummaryOnly, getTasksAndRequests } = require("../services/workerDashboardService");
 
 const getWorkers = async (req, res) => {
      try {
@@ -75,9 +75,6 @@ const createWorkerAvailability = async (req, res) => {
 
 const searchWorkers = async (req, res) => {
      const { categorySlug, lat, lon, radiusMeters } = req.query
-
-     console.log(categorySlug);
-
 
      try {
           const workers = await prisma.$queryRaw`
@@ -242,9 +239,6 @@ const updateAvailability = async (req, res) => {
 
 const getWorkerDetails = async (req, res) => {
   const { workerId } = req.params;
-
-  console.log(workerId);
-  
 
   try {
     // Fetch worker details with all related information
@@ -641,9 +635,6 @@ const getWorkerDashboardTasks = async (req, res) => {
 const getWorkerDetailsByEmail = async (req, res) => {
   const { email } = req.params;
 
-  console.log(email);
-  
-
   try {
     if (!email) {
       return res.status(400).json({ error: 'Email is required' });
@@ -756,9 +747,6 @@ const getWorkerDetailsByEmail = async (req, res) => {
     if (workerDetails.role !== 'worker') {
       return res.status(403).json({ error: 'User is not a worker' });
     }
-
-    // console.log(workerDetails);
-    
 
     res.status(200).json({
       success: true,
