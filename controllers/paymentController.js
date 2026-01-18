@@ -1,4 +1,9 @@
 const prisma = require("../config/prisma");
+const SSLCommerzPayment = require('sslcommerz-lts');
+
+const store_id = process.env.SSLCOMMERZ_STORE_ID;
+const store_passwd = process.env.SSLCOMMERZ_STORE_PASSWORD;
+const is_live = process.env.SSLCOMMERZ_IS_LIVE === 'true'; // false for sandbox
 
 const paymentOnHand = async (req, res) => {
      const { order_id, payer_email, amount } = req.body;
@@ -42,7 +47,7 @@ const paymentOnHand = async (req, res) => {
                     payer_id: payer.id,
                     payment_method: "cash",
                     amount: parseFloat(amount),
-                    status: "paid",
+                    status: "pending",
                     paid_at: new Date()
                }
           });
@@ -51,7 +56,7 @@ const paymentOnHand = async (req, res) => {
           await prisma.orders.update({
                where: { id: order_id },
                data: {
-                    payment_completed: true,
+                    payment_completed: false,
                     updated_at: new Date()
                }
           });
@@ -71,6 +76,69 @@ const paymentOnHand = async (req, res) => {
      }
 };
 
+const verifyPayment = async (req, res) => {
+     const { orderId } = req.params;
+
+     try {
+          // Check if order exists
+          const order = await prisma.orders.findUnique({
+               where: { id: orderId }
+          });
+
+          if (!order) {
+               return res.status(404).json({ error: "Order not found" });
+          }
+
+          // Check if order is already paid
+          if (order.payment_completed) {
+               return res.status(400).json({ error: "Payment already verified" });
+          }
+
+          // Find pending payment for this order
+          const pendingPayment = await prisma.payments.findFirst({
+               where: {
+                    order_id: orderId,
+                    status: "pending"
+               }
+          });
+
+          if (!pendingPayment) {
+               return res.status(404).json({ error: "No pending payment found for this order" });
+          }
+
+          // Update payment status to paid
+          await prisma.payments.update({
+               where: { id: pendingPayment.id },
+               data: {
+                    status: "paid",
+                    paid_at: new Date()
+               }
+          });
+
+          // Update order payment_completed to true
+          await prisma.orders.update({
+               where: { id: orderId },
+               data: {
+                    payment_completed: true,
+                    updated_at: new Date()
+               }
+          });
+
+          res.status(200).json({
+               message: "Payment verified successfully"
+          });
+     } catch (error) {
+          console.error("Error verifying payment:", error);
+
+          if (error.code === "P2025") {
+               return res.status(404).json({ error: "Order or Payment not found" });
+          }
+
+          res.status(500).json({ error: "Internal Server Error" });
+     }
+};
+
 module.exports = {
-     paymentOnHand
+     paymentOnHand,
+     verifyPayment
 };
