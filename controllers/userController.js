@@ -5,9 +5,42 @@ const getUsers = async (req, res) => {
           const users = await prisma.users.findMany({
                where: {
                     role: 'client'
+               },
+               select: {
+                    id: true,
+                    full_name: true,
+                    profile_picture: true,
+                    email: true,
+                    phone: true,
+                    is_active: true,
+                    created_at: true,
+                    gender: true,
+                    last_login_at: true,
+                    _count: {
+                         select: {
+                              orders_orders_client_idTousers: true
+                         }
+                    }
+               },
+               orderBy: {
+                    created_at: 'desc'
                }
           });
-          res.status(200).json(users)
+
+          const formattedUsers = users.map(user => ({
+               id: user.id,
+               name: user.full_name,
+               avatar: user.profile_picture || null,
+               email: user.email,
+               phone: user.phone,
+               status: user.is_active ? 'active' : 'inactive',
+               bookingCount: user._count.orders_orders_client_idTousers,
+               joinedDate: user.created_at,
+               gender: user.gender,
+               lastLoginAt: user.last_login_at
+          }));
+
+          res.status(200).json(formattedUsers);
      } catch (error) {
           console.error('Error fetching users:', error)
           res.status(500).json({ error: 'Internal Server Error' })
@@ -210,4 +243,81 @@ const getUserData = async (req, res) => {
      }
 };
 
-module.exports = { getUsers, createUser, updateAddress, updateUser, getUserData };
+const getUserById = async (req, res) => {
+     const { id } = req.params;
+
+     try {
+          const user = await prisma.users.findUnique({
+               where: {
+                    id
+               },
+               include: {
+                    addresses: {
+                         select: {
+                              id: true,
+                              street: true,
+                              city: true,
+                              district: true,
+                              postal_code: true,
+                              lat: true,
+                              lon: true
+                         }
+                    },
+                    worker_profiles: {
+                         select: {
+                              display_name: true,
+                              bio: true,
+                              years_experience: true,
+                              avg_rating: true,
+                              total_reviews: true,
+                              verification: true
+                         }
+                    },
+                    _count: {
+                         select: {
+                              orders_orders_client_idTousers: true,
+                              orders_orders_assigned_worker_idTousers: true,
+                              payments: true,
+                              reviews_reviews_reviewer_idTousers: true
+                         }
+                    }
+               }
+          });
+
+          if (!user) {
+               return res.status(404).json({ error: "User not found" });
+          }
+
+          // Format the response for admin panel
+          const formattedUser = {
+               id: user.id,
+               fullName: user.full_name,
+               email: user.email,
+               phone: user.phone,
+               gender: user.gender,
+               dateOfBirth: user.date_of_birth,
+               nid: user.nid,
+               profilePicture: user.profile_picture,
+               role: user.role,
+               isActive: user.is_active,
+               createdAt: user.created_at,
+               updatedAt: user.updated_at,
+               lastLoginAt: user.last_login_at,
+               addresses: user.addresses,
+               workerProfile: user.worker_profiles,
+               statistics: {
+                    totalBookingsAsClient: user._count.orders_orders_client_idTousers,
+                    totalBookingsAsWorker: user._count.orders_orders_assigned_worker_idTousers,
+                    totalPayments: user._count.payments,
+                    totalReviews: user._count.reviews_reviews_reviewer_idTousers
+               }
+          };
+
+          res.status(200).json(formattedUser);
+     } catch (error) {
+          console.error("Error fetching user by ID:", error);
+          res.status(500).json({ error: "Failed to fetch user details" });
+     }
+};
+
+module.exports = { getUsers, createUser, updateAddress, updateUser, getUserData, getUserById };
