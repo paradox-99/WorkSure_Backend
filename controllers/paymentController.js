@@ -1,10 +1,18 @@
 const prisma = require("../config/prisma");
-const SSLCommerzPayment = require('sslcommerz-lts');
 
 const store_id = process.env.SSLCOMMERZ_STORE_ID;
 const store_passwd = process.env.SSLCOMMERZ_STORE_PASSWORD;
 const is_live = process.env.SSLCOMMERZ_IS_LIVE === 'true'; // false for sandbox
 const { FRONTEND_URL, BACKEND_URL } = process.env;
+
+// SSLCommerz API URL
+const SSLCOMMERZ_API_URL = is_live 
+     ? 'https://securepay.sslcommerz.com/gwprocess/v4/api.php'
+     : 'https://sandbox.sslcommerz.com/gwprocess/v4/api.php';
+
+const SSLCOMMERZ_VALIDATION_URL = is_live
+     ? 'https://securepay.sslcommerz.com/validator/api/validationserverAPI.php'
+     : 'https://sandbox.sslcommerz.com/validator/api/validationserverAPI.php';
 
 const paymentOnHand = async (req, res) => {
      const { order_id, payer_email, amount } = req.body;
@@ -143,6 +151,14 @@ const initiateSSLPayment = async (req, res) => {
      const { order_id, payer_email } = req.body;
 
      try {
+          // Validate SSLCommerz credentials
+          if (!store_id || !store_passwd) {
+               console.error("SSLCommerz credentials missing:", { store_id: !!store_id, store_passwd: !!store_passwd });
+               return res.status(500).json({
+                    error: "Payment gateway configuration error"
+               });
+          }
+
           // Validate required fields
           if (!order_id || !payer_email) {
                return res.status(400).json({
@@ -179,6 +195,16 @@ const initiateSSLPayment = async (req, res) => {
           // Calculate total amount including extra items
           let totalAmount = parseFloat(order.total_amount || 0);
 
+          // Validate amount
+          if (!totalAmount || totalAmount <= 0) {
+               return res.status(400).json({
+                    error: "Invalid order amount. Amount must be greater than 0"
+               });
+          }
+
+          // Validate phone number (SSLCommerz requires valid phone)
+          const phoneNumber = payer.phone || '01700000000';
+          
           // Generate unique transaction ID
           const tran_id = `TRX_${order_id}_${Date.now()}`;
 
@@ -206,24 +232,65 @@ const initiateSSLPayment = async (req, res) => {
                product_name: 'WorkSure Service',
                product_category: 'Service',
                product_profile: 'general',
-               cus_name: payer.full_name,
+               cus_name: payer.full_name || 'Customer',
                cus_email: payer.email,
                cus_add1: order.address || 'N/A',
                cus_city: 'Dhaka',
                cus_state: 'Dhaka',
                cus_postcode: '1000',
                cus_country: 'Bangladesh',
-               cus_phone: payer.phone,
-               ship_name: payer.full_name,
+               cus_phone: phoneNumber,
+               ship_name: payer.full_name || 'Customer',
                ship_add1: order.address || 'N/A',
                ship_city: 'Dhaka',
                ship_state: 'Dhaka',
                ship_postcode: '1000',
                ship_country: 'Bangladesh',
+               store_id: store_id,
+               store_passwd: store_passwd,
           };
 
-          const sslcz = new SSLCommerzPayment(store_id, store_passwd, is_live);
-          const apiResponse = await sslcz.init(data);
+          console.log("SSLCommerz Request Data:", JSON.stringify(data, null, 2));
+
+          // Make direct API call to SSLCommerz
+          const formData = new URLSearchParams();
+          Object.keys(data).forEach(key => {
+               formData.append(key, data[key]);
+          });
+
+          let apiResponse;
+          try {
+               const response = await fetch(SSLCOMMERZ_API_URL, {
+                    method: 'POST',
+                    headers: {
+                         'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: formData.toString(),
+               });
+
+               const responseText = await response.text();
+               console.log("SSLCommerz Raw Response:", responseText);
+
+               try {
+                    apiResponse = JSON.parse(responseText);
+               } catch (parseError) {
+                    console.error("SSLCommerz returned non-JSON response:", responseText);
+                    await prisma.payments.delete({ where: { id: payment.id } });
+                    return res.status(502).json({
+                         error: "Payment gateway returned invalid response. Please verify SSLCommerz credentials.",
+                         details: responseText.substring(0, 200)
+                    });
+               }
+          } catch (initError) {
+               console.error("SSLCommerz init error:", initError);
+               await prisma.payments.delete({ where: { id: payment.id } });
+               return res.status(502).json({ 
+                    error: "Payment gateway error. Please check your SSLCommerz credentials and try again." 
+               });
+          }
+          
+          console.log("SSLCommerz Response:", apiResponse);
+          
 
           if (apiResponse?.GatewayPageURL) {
                res.status(200).json({
@@ -261,8 +328,9 @@ const sslPaymentSuccess = async (req, res) => {
           }
 
           // Validate the transaction with SSLCommerz
-          const sslcz = new SSLCommerzPayment(store_id, store_passwd, is_live);
-          const validationResponse = await sslcz.validate({ val_id });
+          const validationUrl = `${SSLCOMMERZ_VALIDATION_URL}?val_id=${val_id}&store_id=${store_id}&store_passwd=${store_passwd}&format=json`;
+          const validationRes = await fetch(validationUrl);
+          const validationResponse = await validationRes.json();
 
           if (validationResponse.status === 'VALID' || validationResponse.status === 'VALIDATED') {
                // Update payment status
@@ -356,8 +424,9 @@ const sslPaymentIPN = async (req, res) => {
           }
 
           // Validate with SSLCommerz
-          const sslcz = new SSLCommerzPayment(store_id, store_passwd, is_live);
-          const validationResponse = await sslcz.validate({ val_id });
+          const validationUrl = `${SSLCOMMERZ_VALIDATION_URL}?val_id=${val_id}&store_id=${store_id}&store_passwd=${store_passwd}&format=json`;
+          const validationRes = await fetch(validationUrl);
+          const validationResponse = await validationRes.json();
 
           if (validationResponse.status === 'VALID' || validationResponse.status === 'VALIDATED') {
                await prisma.payments.update({
