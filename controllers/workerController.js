@@ -4,80 +4,150 @@ const { sendRequestAcceptedEmail, sendRequestCancelledEmail } = require("./mailC
 const { getSummaryOnly, getTasksAndRequests } = require("../services/workerDashboardService");
 
 const getWorkers = async (req, res) => {
-     try {
-          const workers = await prisma.users.findMany({
-               where: {
-                    role: 'worker'
-               }
-          })
-          res.status(200).json(workers)
-     } catch (error) {
-          console.error('Error fetching users:', error)
-          res.status(500).json({ error: 'Internal Server Error' })
-     }
+  try {
+    const workers = await prisma.users.findMany({
+      where: {
+        role: 'worker'
+      },
+      include: {
+        worker_profiles: {
+          select: {
+            display_name: true,
+            avg_rating: true,
+            total_reviews: true,
+            verification: true,
+            documents_count: true,
+            years_experience: true
+          }
+        },
+        addresses: {
+          select: {
+            id: true,
+            city: true,
+            district: true
+          }
+        },
+        worker_services: {
+          select: {
+            id: true,
+            base_price: true,
+            price_unit: true,
+            service_sections: {
+              select: {
+                name: true,
+                slug: true
+              }
+            },
+            service_categories: {
+              select: {
+                name: true,
+                slug: true
+              }
+            }
+          }
+        },
+        _count: {
+          select: {
+            orders_orders_assigned_worker_idTousers: true
+          }
+        }
+      },
+      orderBy: {
+        created_at: 'desc'
+      }
+    });
+
+    const formattedWorkers = workers.map(worker => {
+      // Get primary service category
+      const primaryService = worker.worker_services[0];
+      const category = primaryService?.service_categories?.name || primaryService?.service_sections?.name || 'Not specified';
+
+      return {
+        id: worker.id,
+        name: worker.full_name || worker.worker_profiles?.display_name,
+        phone: worker.phone,
+        profile_picture: worker.profile_picture,
+        category: category,
+        verification: worker.worker_profiles?.verification || 'unverified',
+        avg_rating: worker.worker_profiles?.avg_rating ? parseFloat(worker.worker_profiles.avg_rating) : 0.0,
+        total_reviews: worker.worker_profiles?.total_reviews || 0,
+        services_count: worker.worker_services.length,
+        documents_count: worker.worker_profiles?.documents_count || 0,
+        status: worker.status || 'active',
+        years_experience: worker.worker_profiles?.years_experience || 0,
+        total_hirings: worker._count.orders_orders_assigned_worker_idTousers,
+        created_at: worker.created_at
+      };
+    });
+
+    res.status(200).json(formattedWorkers);
+  } catch (error) {
+    console.error('Error fetching workers:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
 }
 
 const createWorker = async (req, res) => {
-     const { user_id, display_name, bio, years_experience, category_id, base_price, price_unit, skills, available_from, available_to, weekend, area_geometry } = req.body
+  const { user_id, display_name, bio, years_experience, category_id, base_price, price_unit, skills, available_from, available_to, weekend, area_geometry } = req.body
 
-     try {
-          await prisma.worker_profiles.create({
-               data: {
-                    user_id,
-                    display_name,
-                    bio,
-                    years_experience,
-                    created_at: new Date()
-               }
-          })
-          res.status(201).json({ message: 'Worker created successfully' })
-     } catch (error) {
-          res.status(500).json({ error: 'Internal Server Error' })
-     }
+  try {
+    await prisma.worker_profiles.create({
+      data: {
+        user_id,
+        display_name,
+        bio,
+        years_experience,
+        created_at: new Date()
+      }
+    })
+    res.status(201).json({ message: 'Worker created successfully' })
+  } catch (error) {
+    res.status(500).json({ error: 'Internal Server Error' })
+  }
 }
 
 const createWorkerService = async (req, res) => {
-     const { user_id, category_id, base_price, price_unit, skills } = req.body
+  const { user_id, category_id, base_price, price_unit, skills } = req.body
 
-     try {
-          await prisma.worker_services.create({
-               data: {
-                    user_id,
-                    category_id,
-                    base_price,
-                    price_unit,
-                    skills
-               }
-          })
-          res.status(201).json({ message: 'Worker Service created successfully' })
-     } catch (error) {
-          res.status(500).json({ error: 'Internal Server Error' })
-     }
+  try {
+    await prisma.worker_services.create({
+      data: {
+        user_id,
+        category_id,
+        base_price,
+        price_unit,
+        skills
+      }
+    })
+    res.status(201).json({ message: 'Worker Service created successfully' })
+  } catch (error) {
+    res.status(500).json({ error: 'Internal Server Error' })
+  }
 }
 
 const createWorkerAvailability = async (req, res) => {
-     const { user_id, available_from, available_to, weekend } = req.body
+  const { user_id, available_from, available_to, weekend } = req.body
 
-     try {
-          await prisma.availabilities.create({
-               data: {
-                    worker_id: user_id,
-                    available_from: new Date(available_from),
-                    available_to: new Date(available_to),
-                    weekend
-               }
-          })
-          res.status(201).json({ message: 'Worker Availability created successfully' })
-     } catch (error) {
-          res.status(500).json({ error: 'Internal Server Error' })
-     }
+  try {
+    await prisma.availabilities.create({
+      data: {
+        worker_id: user_id,
+        available_from: new Date(available_from),
+        available_to: new Date(available_to),
+        weekend
+      }
+    })
+    res.status(201).json({ message: 'Worker Availability created successfully' })
+  } catch (error) {
+    res.status(500).json({ error: 'Internal Server Error' })
+  }
 }
 
 const searchWorkers = async (req, res) => {
-     const { categorySlug, lat, lon, radiusMeters } = req.query
+  const { categorySlug, lat, lon, radiusMeters } = req.query
 
-     try {
-          const workers = await prisma.$queryRaw`
+  try {
+    const workers = await prisma.$queryRaw`
           WITH cat AS (
             SELECT id FROM service_sections WHERE slug = ${categorySlug}
           )
@@ -105,52 +175,52 @@ const searchWorkers = async (req, res) => {
               ST_SetSRID(ST_MakePoint(a.lon, a.lat), 4326)::geography,
               ST_SetSRID(ST_MakePoint(${lon}, ${lat}), 4326)::geography,
               ${radiusMeters}
-            )`;            
-          res.status(200).json(workers)
-     } catch (error) {
-          console.error('Error searching workers:', error)
-          res.status(500).json({ error: 'Internal Server Error' })
-     }
+            )`;
+    res.status(200).json(workers)
+  } catch (error) {
+    console.error('Error searching workers:', error)
+    res.status(500).json({ error: 'Internal Server Error' })
+  }
 }
 
 const updateWorkerProfile = async (req, res) => {
-     const { userId } = req.params;
+  const { userId } = req.params;
 
-     const {
-          display_name,
-          bio,
-          years_experience,
-          avg_rating,
-          total_reviews,
-          verification,
-          documents_count
-     } = req.body;
+  const {
+    display_name,
+    bio,
+    years_experience,
+    avg_rating,
+    total_reviews,
+    verification,
+    documents_count
+  } = req.body;
 
-     try {
-          const data = {
-               ...(display_name !== undefined && { display_name }),
-               ...(bio !== undefined && { bio }),
-               ...(years_experience !== undefined && { years_experience }),
-               ...(avg_rating !== undefined && { avg_rating }),
-               ...(total_reviews !== undefined && { total_reviews }),
-               ...(verification !== undefined && { verification }),
-               ...(documents_count !== undefined && { documents_count })
-          };
+  try {
+    const data = {
+      ...(display_name !== undefined && { display_name }),
+      ...(bio !== undefined && { bio }),
+      ...(years_experience !== undefined && { years_experience }),
+      ...(avg_rating !== undefined && { avg_rating }),
+      ...(total_reviews !== undefined && { total_reviews }),
+      ...(verification !== undefined && { verification }),
+      ...(documents_count !== undefined && { documents_count })
+    };
 
-          if (Object.keys(data).length === 0) {
-               return res.status(400).json({ error: "No valid fields to update" });
-          }
+    if (Object.keys(data).length === 0) {
+      return res.status(400).json({ error: "No valid fields to update" });
+    }
 
-          const updatedProfile = await prisma.workerProfile.update({
-               where: { user_id: userId },
-               data
-          });
+    const updatedProfile = await prisma.workerProfile.update({
+      where: { user_id: userId },
+      data
+    });
 
-          res.status(200).json(updatedProfile);
-     } catch (error) {
-          console.error("Error updating worker profile:", error);
-          res.status(500).json({ error: "Failed to update worker profile" });
-     }
+    res.status(200).json(updatedProfile);
+  } catch (error) {
+    console.error("Error updating worker profile:", error);
+    res.status(500).json({ error: "Failed to update worker profile" });
+  }
 };
 
 const updateWorkerService = async (req, res) => {
@@ -251,7 +321,7 @@ const getWorkerDetails = async (req, res) => {
         full_name: true,
         role: true,
         gender: true,
-        profile_picture: true, 
+        profile_picture: true,
         // Worker profile
         worker_profiles: {
           select: {
@@ -319,12 +389,12 @@ const getWorkerDetails = async (req, res) => {
     if (!workerDetails) {
       return res.status(404).json({ error: 'Worker not found' });
     }
-    
+
     // Check if user is actually a worker
     if (workerDetails.role !== 'worker') {
       return res.status(400).json({ error: 'User is not a worker' });
     }
-    
+
     res.status(200).json(workerDetails);
   } catch (error) {
     console.error('Error fetching worker details:', error);
@@ -332,7 +402,7 @@ const getWorkerDetails = async (req, res) => {
   }
 };
 
-const cancelWorkRequest = async(req, res) => {
+const cancelWorkRequest = async (req, res) => {
   const { orderId } = req.params;
   const { workerId } = req.body;
   const cancelReason = req.body.reason || '';
@@ -360,8 +430,8 @@ const cancelWorkRequest = async(req, res) => {
     // Check if order status allows cancellation
     const cancellableStatuses = ['pending', 'accepted', 'in_progress'];
     if (!cancellableStatuses.includes(order.status)) {
-      return res.status(400).json({ 
-        error: `Order with status '${order.status}' cannot be cancelled` 
+      return res.status(400).json({
+        error: `Order with status '${order.status}' cannot be cancelled`
       });
     }
 
@@ -384,8 +454,8 @@ const cancelWorkRequest = async(req, res) => {
     const orderAddress = await prisma.addresses.findUnique({
       where: { id: order.address_id }
     });
-    const addressString = orderAddress ? 
-      `${orderAddress.street || ''}, ${orderAddress.city || ''}, ${orderAddress.district || ''}`.replace(/^, |, $/g, '') : 
+    const addressString = orderAddress ?
+      `${orderAddress.street || ''}, ${orderAddress.city || ''}, ${orderAddress.district || ''}`.replace(/^, |, $/g, '') :
       'Not specified';
 
     // Create a notification for the client
@@ -417,9 +487,9 @@ const cancelWorkRequest = async(req, res) => {
       }
     }
 
-    res.status(200).json({ 
+    res.status(200).json({
       message: 'Work request cancelled successfully',
-      order: updatedOrder 
+      order: updatedOrder
     });
 
   } catch (error) {
@@ -428,7 +498,7 @@ const cancelWorkRequest = async(req, res) => {
   }
 }
 
-const acceptWorkRequest = async(req, res) => {
+const acceptWorkRequest = async (req, res) => {
   const { orderId } = req.params;
   const { workerId } = req.body;
 
@@ -449,8 +519,8 @@ const acceptWorkRequest = async(req, res) => {
 
     // Check if order status is pending
     if (order.status !== 'pending') {
-      return res.status(400).json({ 
-        error: `Order with status '${order.status}' cannot be accepted` 
+      return res.status(400).json({
+        error: `Order with status '${order.status}' cannot be accepted`
       });
     }
 
@@ -487,8 +557,8 @@ const acceptWorkRequest = async(req, res) => {
 
     // Get address string from included address
     const orderAddress = updatedOrder.addresses;
-    const addressString = orderAddress ? 
-      `${orderAddress.street || ''}, ${orderAddress.city || ''}, ${orderAddress.district || ''}`.replace(/^, |, $/g, '') : 
+    const addressString = orderAddress ?
+      `${orderAddress.street || ''}, ${orderAddress.city || ''}, ${orderAddress.district || ''}`.replace(/^, |, $/g, '') :
       'Not specified';
 
     // Create a notification for the client
@@ -514,9 +584,9 @@ const acceptWorkRequest = async(req, res) => {
       });
     }
 
-    res.status(200).json({ 
+    res.status(200).json({
       message: 'Work request accepted successfully',
-      order: updatedOrder 
+      order: updatedOrder
     });
 
   } catch (error) {
@@ -533,10 +603,10 @@ const acceptWorkRequest = async(req, res) => {
 const getWorkerDashboardSummary = async (req, res) => {
   try {
     const { email } = req.params;
-    
+
     if (!email) {
-      return res.status(400).json({ 
-        error: 'Email is required' 
+      return res.status(400).json({
+        error: 'Email is required'
       });
     }
 
@@ -551,8 +621,8 @@ const getWorkerDashboardSummary = async (req, res) => {
     }
 
     if (worker.role !== 'worker') {
-      return res.status(403).json({ 
-        error: 'Access denied. This endpoint is only accessible to workers.' 
+      return res.status(403).json({
+        error: 'Access denied. This endpoint is only accessible to workers.'
       });
     }
 
@@ -569,9 +639,9 @@ const getWorkerDashboardSummary = async (req, res) => {
 
   } catch (error) {
     console.error('Error fetching worker dashboard summary:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to fetch summary data',
-      message: error.message 
+      message: error.message
     });
   }
 };
@@ -584,10 +654,10 @@ const getWorkerDashboardSummary = async (req, res) => {
 const getWorkerDashboardTasks = async (req, res) => {
   try {
     const { email } = req.params;
-    
+
     if (!email) {
-      return res.status(400).json({ 
-        error: 'Email is required' 
+      return res.status(400).json({
+        error: 'Email is required'
       });
     }
 
@@ -602,8 +672,8 @@ const getWorkerDashboardTasks = async (req, res) => {
     }
 
     if (worker.role !== 'worker') {
-      return res.status(403).json({ 
-        error: 'Access denied. This endpoint is only accessible to workers.' 
+      return res.status(403).json({
+        error: 'Access denied. This endpoint is only accessible to workers.'
       });
     }
 
@@ -620,9 +690,9 @@ const getWorkerDashboardTasks = async (req, res) => {
 
   } catch (error) {
     console.error('Error fetching worker dashboard tasks:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to fetch tasks data',
-      message: error.message 
+      message: error.message
     });
   }
 };
