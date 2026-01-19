@@ -654,7 +654,7 @@ const getWorkerDetailsByEmail = async (req, res) => {
         profile_picture: true,
         created_at: true,
         last_login_at: true,
-        is_active: true,
+        status: true,
         // Worker profile
         worker_profiles: {
           select: {

@@ -12,7 +12,7 @@ const getUsers = async (req, res) => {
                     profile_picture: true,
                     email: true,
                     phone: true,
-                    is_active: true,
+                    status: true,
                     created_at: true,
                     gender: true,
                     last_login_at: true,
@@ -33,7 +33,7 @@ const getUsers = async (req, res) => {
                avatar: user.profile_picture || null,
                email: user.email,
                phone: user.phone,
-               status: user.is_active ? 'active' : 'inactive',
+               status: user.status,
                bookingCount: user._count.orders_orders_client_idTousers,
                joinedDate: user.created_at,
                gender: user.gender,
@@ -180,7 +180,7 @@ const updateUser = async (req, res) => {
           profile_picture,
           role,
           last_login_at,
-          is_active
+          status,
      } = req.body;
 
      try {
@@ -198,7 +198,7 @@ const updateUser = async (req, res) => {
                ...(last_login_at !== undefined && {
                     last_login_at: new Date(last_login_at)
                }),
-               ...(is_active !== undefined && { is_active })
+               ...(status !== undefined && { status })
           };
 
 
@@ -299,7 +299,7 @@ const getUserById = async (req, res) => {
                nid: user.nid,
                profilePicture: user.profile_picture,
                role: user.role,
-               isActive: user.is_active,
+               status: user.status,
                createdAt: user.created_at,
                updatedAt: user.updated_at,
                lastLoginAt: user.last_login_at,
@@ -320,4 +320,102 @@ const getUserById = async (req, res) => {
      }
 };
 
-module.exports = { getUsers, createUser, updateAddress, updateUser, getUserData, getUserById };
+const suspendUser = async (req, res) => {
+     const { id } = req.params;
+     const { status } = req.body;
+
+     try {
+          // Validate status value
+          const validStatuses = ['active', 'suspended', 'inactive'];
+          if (status && !validStatuses.includes(status)) {
+               return res.status(400).json({ 
+                    error: "Invalid status. Must be 'active', 'suspended', or 'inactive'" 
+               });
+          }
+
+          // Check if user exists
+          const existingUser = await prisma.users.findUnique({
+               where: { id },
+               select: { id: true, full_name: true, status: true }
+          });
+
+          if (!existingUser) {
+               return res.status(404).json({ error: "User not found" });
+          }
+
+          // Update user status
+          const updatedUser = await prisma.users.update({
+               where: { id },
+               data: { 
+                    status: status || 'suspended',
+                    updated_at: new Date()
+               },
+               select: {
+                    id: true,
+                    full_name: true,
+                    email: true,
+                    status: true,
+                    updated_at: true
+               }
+          });
+
+          res.status(200).json({
+               message: `User status updated to ${updatedUser.status} successfully`,
+               user: updatedUser
+          });
+     } catch (error) {
+          console.error("Error suspending user:", error);
+          res.status(500).json({ error: "Failed to update user status" });
+     }
+};
+
+const activateUser = async (req, res) => {
+     const { id } = req.params;
+     const { status } = req.body;
+
+     try {
+          // Validate status value
+          const validStatuses = ['active', 'suspended', 'inactive'];
+          if (status && !validStatuses.includes(status)) {
+               return res.status(400).json({ 
+                    error: "Invalid status. Must be 'active', 'suspended', or 'inactive'" 
+               });
+          }
+
+          // Check if user exists
+          const existingUser = await prisma.users.findUnique({
+               where: { id },
+               select: { id: true, full_name: true, status: true }
+          });
+
+          if (!existingUser) {
+               return res.status(404).json({ error: "User not found" });
+          }
+
+          // Update user status
+          const updatedUser = await prisma.users.update({
+               where: { id },
+               data: { 
+                    status: status || 'active',
+                    updated_at: new Date()
+               },
+               select: {
+                    id: true,
+                    full_name: true,
+                    email: true,
+                    status: true,
+                    updated_at: true
+               }
+          });
+
+          res.status(200).json({
+               message: `User status updated to ${updatedUser.status} successfully`,
+               user: updatedUser
+          });
+     } catch (error) {
+          console.error("Error activating user:", error);
+          res.status(500).json({ error: "Failed to update user status" });
+     }
+};
+
+module.exports = { getUsers, createUser, updateAddress, updateUser, getUserData, getUserById, suspendUser, activateUser };
