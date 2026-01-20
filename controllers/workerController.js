@@ -1002,4 +1002,23 @@ const getWorkerById = async (req, res) => {
   }
 };
 
-module.exports = { getWorkers, searchWorkers, createWorker, createWorkerService, createWorkerAvailability, updateWorkerProfile, updateWorkerService, updateAvailability, getWorkerDetails, cancelWorkRequest, acceptWorkRequest, getWorkerDashboardSummary, getWorkerDashboardTasks, getWorkerDetailsByEmail, getWorkerById };
+const verifyWorker = async (req, res) => {
+  const { workerId } = req.params;
+
+  try {
+    const updatedWorkerProfile = await prisma.worker_profiles.update({
+      where: { user_id: workerId },
+      data: { verification: 'verified' }
+    });
+
+    res.status(200).json({
+      message: 'Worker verified successfully',
+      workerProfile: updatedWorkerProfile
+    });
+  } catch (error) {
+    console.error('Error verifying worker:', error);
+    res.status(500).json({ error: 'Failed to verify worker' });
+  }
+};
+
+module.exports = { getWorkers, searchWorkers, createWorker, createWorkerService, createWorkerAvailability, updateWorkerProfile, updateWorkerService, updateAvailability, getWorkerDetails, cancelWorkRequest, acceptWorkRequest, getWorkerDashboardSummary, getWorkerDashboardTasks, getWorkerDetailsByEmail, getWorkerById, verifyWorker };
