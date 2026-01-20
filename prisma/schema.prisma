@@ -290,9 +290,11 @@ enum user_status {
 enum category_status {
   active
   inactive
+  disabled
 }
 
 enum section_status {
   active
   inactive
+  disabled
 }
