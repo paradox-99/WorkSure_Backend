@@ -7,6 +7,7 @@ const workerRoutes = require('./routes/workerRoutes');
 const orderRoutes = require('./routes/orderRoutes');
 const mailRoutes = require('./routes/mailRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
+const categoryRoutes = require('./routes/categoryRoutes');
 
 const app = express();
 
@@ -27,5 +28,6 @@ app.use('/api/workerRoutes', workerRoutes);
 app.use('/api/orderRoutes', orderRoutes);
 app.use('/api/mail', mailRoutes);
 app.use('/api/paymentRoutes', paymentRoutes);
+app.use('/api/categoryRoutes', categoryRoutes);
 
 module.exports = app;
