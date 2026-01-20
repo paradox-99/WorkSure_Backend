@@ -73,7 +73,7 @@ const getWorkers = async (req, res) => {
         total_reviews: worker.worker_profiles?.total_reviews || 0,
         services_count: worker.worker_services.length,
         documents_count: worker.worker_profiles?.documents_count || 0,
-        status: worker.status || 'active',
+        status: worker.status,
         years_experience: worker.worker_profiles?.years_experience || 0,
         total_hirings: worker._count.orders_orders_assigned_worker_idTousers,
         created_at: worker.created_at
@@ -1002,4 +1002,80 @@ const getWorkerById = async (req, res) => {
   }
 };
 
-module.exports = { getWorkers, searchWorkers, createWorker, createWorkerService, createWorkerAvailability, updateWorkerProfile, updateWorkerService, updateAvailability, getWorkerDetails, cancelWorkRequest, acceptWorkRequest, getWorkerDashboardSummary, getWorkerDashboardTasks, getWorkerDetailsByEmail, getWorkerById };
+const verifyWorker = async (req, res) => {
+  const { workerId } = req.params;
+
+  try {
+    const updatedWorkerProfile = await prisma.worker_profiles.update({
+      where: { user_id: workerId },
+      data: { verification: 'verified' }
+    });
+
+    res.status(200).json({
+      message: 'Worker verified successfully',
+      workerProfile: updatedWorkerProfile
+    });
+  } catch (error) {
+    console.error('Error verifying worker:', error);
+    res.status(500).json({ error: 'Failed to verify worker' });
+  }
+};
+
+const suspendWorker = async (req, res) => {
+  const { workerId } = req.params;
+
+  try {
+    const updatedWorkerProfile = await prisma.users.update({
+      where: { id: workerId },
+      data: { status: 'suspended' }
+    });
+
+    res.status(200).json({
+      message: 'Worker suspended successfully',
+      workerProfile: updatedWorkerProfile
+    });
+  } catch (error) {
+    console.error('Error suspending worker:', error);
+    res.status(500).json({ error: 'Failed to suspend worker' });
+  }
+};
+
+const rejectWorker = async (req, res) => {
+  const { workerId } = req.params;
+
+  try {
+    const updatedWorkerProfile = await prisma.worker_profiles.update({
+      where: { user_id: workerId },
+      data: { verification: 'rejected' }
+    });
+
+    res.status(200).json({
+      message: 'Worker rejected successfully',
+      workerProfile: updatedWorkerProfile
+    });
+  } catch (error) {
+    console.error('Error rejecting worker:', error);
+    res.status(500).json({ error: 'Failed to reject worker' });
+  }
+};
+
+const activateWorker = async (req, res) => {
+  const { workerId } = req.params;
+
+  try {
+    const updatedWorkerProfile = await prisma.users.update({
+      where: { id: workerId },
+      data: { status: 'active' }
+    });
+
+    res.status(200).json({
+      message: 'Worker activated successfully',
+      workerProfile: updatedWorkerProfile
+    });
+  } catch (error) {
+    console.error('Error activating worker:', error);
+    res.status(500).json({ error: 'Failed to activate worker' });
+  }
+};
+
+module.exports = { getWorkers, searchWorkers, createWorker, createWorkerService, createWorkerAvailability, updateWorkerProfile, updateWorkerService, updateAvailability, getWorkerDetails, cancelWorkRequest, acceptWorkRequest, getWorkerDashboardSummary, getWorkerDashboardTasks, getWorkerDetailsByEmail, getWorkerById, verifyWorker, suspendWorker, rejectWorker, activateWorker };
