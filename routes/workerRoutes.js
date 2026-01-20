@@ -1,12 +1,13 @@
 const express = require('express');
 const router = express.Router();
-const {getWorkers, createWorker, createWorkerAvailability, createWorkerService, searchWorkers, updateWorkerProfile,updateWorkerService, updateAvailability, getWorkerDetails, getWorkerDashboardSummary, getWorkerDashboardTasks, getWorkerDetailsByEmail, getWorkerById, verifyWorker} = require('../controllers/workerController');
+const {getWorkers, createWorker, createWorkerAvailability, createWorkerService, searchWorkers, updateWorkerProfile,updateWorkerService, updateAvailability, getWorkerDetails, getWorkerDashboardSummary, getWorkerDashboardTasks, getWorkerDetailsByEmail, getWorkerById, verifyWorker, suspendWorker} = require('../controllers/workerController');
 const { getWorkerHirings, getWorkerRequests } = require('../controllers/orderController');
 
 router.get('/workers', getWorkers);
 router.get('/adminGetWorkerData/:id', getWorkerById);
 router.get('/getWorkerDetails/:workerId', getWorkerDetails);
 router.patch('/verifyWorker/:workerId', verifyWorker);
+router.patch('/suspendWorker/:workerId', suspendWorker);
 
 router.post('/workers', createWorker);
 router.post('/workers/services', createWorkerService);
