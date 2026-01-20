@@ -5,9 +5,42 @@ const getUsers = async (req, res) => {
           const users = await prisma.users.findMany({
                where: {
                     role: 'client'
+               },
+               select: {
+                    id: true,
+                    full_name: true,
+                    profile_picture: true,
+                    email: true,
+                    phone: true,
+                    status: true,
+                    created_at: true,
+                    gender: true,
+                    last_login_at: true,
+                    _count: {
+                         select: {
+                              orders_orders_client_idTousers: true
+                         }
+                    }
+               },
+               orderBy: {
+                    created_at: 'desc'
                }
           });
-          res.status(200).json(users)
+
+          const formattedUsers = users.map(user => ({
+               id: user.id,
+               name: user.full_name,
+               avatar: user.profile_picture || null,
+               email: user.email,
+               phone: user.phone,
+               status: user.status,
+               bookingCount: user._count.orders_orders_client_idTousers,
+               joinedDate: user.created_at,
+               gender: user.gender,
+               lastLoginAt: user.last_login_at
+          }));
+
+          res.status(200).json(formattedUsers);
      } catch (error) {
           console.error('Error fetching users:', error)
           res.status(500).json({ error: 'Internal Server Error' })
@@ -147,7 +180,7 @@ const updateUser = async (req, res) => {
           profile_picture,
           role,
           last_login_at,
-          is_active
+          status,
      } = req.body;
 
      try {
@@ -165,7 +198,7 @@ const updateUser = async (req, res) => {
                ...(last_login_at !== undefined && {
                     last_login_at: new Date(last_login_at)
                }),
-               ...(is_active !== undefined && { is_active })
+               ...(status !== undefined && { status })
           };
 
 
@@ -210,4 +243,179 @@ const getUserData = async (req, res) => {
      }
 };
 
-module.exports = { getUsers, createUser, updateAddress, updateUser, getUserData };
+const getUserById = async (req, res) => {
+     const { id } = req.params;
+
+     try {
+          const user = await prisma.users.findUnique({
+               where: {
+                    id
+               },
+               include: {
+                    addresses: {
+                         select: {
+                              id: true,
+                              street: true,
+                              city: true,
+                              district: true,
+                              postal_code: true,
+                              lat: true,
+                              lon: true
+                         }
+                    },
+                    worker_profiles: {
+                         select: {
+                              display_name: true,
+                              bio: true,
+                              years_experience: true,
+                              avg_rating: true,
+                              total_reviews: true,
+                              verification: true
+                         }
+                    },
+                    _count: {
+                         select: {
+                              orders_orders_client_idTousers: true,
+                              orders_orders_assigned_worker_idTousers: true,
+                              payments: true,
+                              reviews_reviews_reviewer_idTousers: true
+                         }
+                    }
+               }
+          });
+
+          if (!user) {
+               return res.status(404).json({ error: "User not found" });
+          }
+
+          // Format the response for admin panel
+          const formattedUser = {
+               id: user.id,
+               fullName: user.full_name,
+               email: user.email,
+               phone: user.phone,
+               gender: user.gender,
+               dateOfBirth: user.date_of_birth,
+               nid: user.nid,
+               profilePicture: user.profile_picture,
+               role: user.role,
+               status: user.status,
+               createdAt: user.created_at,
+               updatedAt: user.updated_at,
+               lastLoginAt: user.last_login_at,
+               addresses: user.addresses,
+               workerProfile: user.worker_profiles,
+               statistics: {
+                    totalBookingsAsClient: user._count.orders_orders_client_idTousers,
+                    totalBookingsAsWorker: user._count.orders_orders_assigned_worker_idTousers,
+                    totalPayments: user._count.payments,
+                    totalReviews: user._count.reviews_reviews_reviewer_idTousers
+               }
+          };
+
+          res.status(200).json(formattedUser);
+     } catch (error) {
+          console.error("Error fetching user by ID:", error);
+          res.status(500).json({ error: "Failed to fetch user details" });
+     }
+};
+
+const suspendUser = async (req, res) => {
+     const { id } = req.params;
+     const { status } = req.body;
+
+     try {
+          // Validate status value
+          const validStatuses = ['active', 'suspended', 'inactive'];
+          if (status && !validStatuses.includes(status)) {
+               return res.status(400).json({ 
+                    error: "Invalid status. Must be 'active', 'suspended', or 'inactive'" 
+               });
+          }
+
+          // Check if user exists
+          const existingUser = await prisma.users.findUnique({
+               where: { id },
+               select: { id: true, full_name: true, status: true }
+          });
+
+          if (!existingUser) {
+               return res.status(404).json({ error: "User not found" });
+          }
+
+          // Update user status
+          const updatedUser = await prisma.users.update({
+               where: { id },
+               data: { 
+                    status: status || 'suspended',
+                    updated_at: new Date()
+               },
+               select: {
+                    id: true,
+                    full_name: true,
+                    email: true,
+                    status: true,
+                    updated_at: true
+               }
+          });
+
+          res.status(200).json({
+               message: `User status updated to ${updatedUser.status} successfully`,
+               user: updatedUser
+          });
+     } catch (error) {
+          console.error("Error suspending user:", error);
+          res.status(500).json({ error: "Failed to update user status" });
+     }
+};
+
+const activateUser = async (req, res) => {
+     const { id } = req.params;
+     const { status } = req.body;
+
+     try {
+          // Validate status value
+          const validStatuses = ['active', 'suspended', 'inactive'];
+          if (status && !validStatuses.includes(status)) {
+               return res.status(400).json({ 
+                    error: "Invalid status. Must be 'active', 'suspended', or 'inactive'" 
+               });
+          }
+
+          // Check if user exists
+          const existingUser = await prisma.users.findUnique({
+               where: { id },
+               select: { id: true, full_name: true, status: true }
+          });
+
+          if (!existingUser) {
+               return res.status(404).json({ error: "User not found" });
+          }
+
+          // Update user status
+          const updatedUser = await prisma.users.update({
+               where: { id },
+               data: { 
+                    status: status || 'active',
+                    updated_at: new Date()
+               },
+               select: {
+                    id: true,
+                    full_name: true,
+                    email: true,
+                    status: true,
+                    updated_at: true
+               }
+          });
+
+          res.status(200).json({
+               message: `User status updated to ${updatedUser.status} successfully`,
+               user: updatedUser
+          });
+     } catch (error) {
+          console.error("Error activating user:", error);
+          res.status(500).json({ error: "Failed to update user status" });
+     }
+};
+
+module.exports = { getUsers, createUser, updateAddress, updateUser, getUserData, getUserById, suspendUser, activateUser };
