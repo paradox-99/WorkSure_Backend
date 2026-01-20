@@ -828,4 +828,178 @@ const getWorkerDetailsByEmail = async (req, res) => {
   }
 };
 
-module.exports = { getWorkers, searchWorkers, createWorker, createWorkerService, createWorkerAvailability, updateWorkerProfile, updateWorkerService, updateAvailability, getWorkerDetails, cancelWorkRequest, acceptWorkRequest, getWorkerDashboardSummary, getWorkerDashboardTasks, getWorkerDetailsByEmail };
+const getWorkerById = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const worker = await prisma.users.findUnique({
+      where: {
+        id,
+        role: 'worker'
+      },
+      include: {
+        worker_profiles: {
+          select: {
+            display_name: true,
+            bio: true,
+            years_experience: true,
+            avg_rating: true,
+            total_reviews: true,
+            verification: true,
+            documents_count: true,
+            created_at: true,
+            updated_at: true
+          }
+        },
+        addresses: {
+          select: {
+            id: true,
+            street: true,
+            city: true,
+            district: true,
+            postal_code: true,
+            lat: true,
+            lon: true
+          }
+        },
+        worker_services: {
+          select: {
+            id: true,
+            base_price: true,
+            price_unit: true,
+            skills: true,
+            created_at: true,
+            service_sections: {
+              select: {
+                name: true,
+                slug: true,
+                description: true
+              }
+            },
+            service_categories: {
+              select: {
+                name: true,
+                slug: true,
+                description: true
+              }
+            }
+          }
+        },
+        availabilities: {
+          select: {
+            id: true,
+            available_from: true,
+            available_to: true,
+            weekend: true
+          }
+        },
+        verification_documents: {
+          select: {
+            id: true,
+            document_type: true,
+            file_url: true,
+            status: true,
+            uploaded_at: true,
+            reviewed_at: true,
+            review_comment: true
+          },
+          orderBy: {
+            uploaded_at: 'desc'
+          }
+        },
+        reviews_reviews_worker_idTousers: {
+          select: {
+            id: true,
+            rating: true,
+            comment: true,
+            created_at: true,
+            users_reviews_reviewer_idTousers: {
+              select: {
+                full_name: true,
+                profile_picture: true
+              }
+            }
+          },
+          orderBy: {
+            created_at: 'desc'
+          },
+          take: 10
+        },
+        _count: {
+          select: {
+            orders_orders_assigned_worker_idTousers: true,
+            payments: true,
+            reviews_reviews_worker_idTousers: true
+          }
+        }
+      }
+    });
+
+    if (!worker) {
+      return res.status(404).json({ error: 'Worker not found' });
+    }
+
+    // Format the response for admin panel
+    const formattedWorker = {
+      id: worker.id,
+      fullName: worker.full_name,
+      email: worker.email,
+      phone: worker.phone,
+      gender: worker.gender,
+      dateOfBirth: worker.date_of_birth,
+      nid: worker.nid,
+      profilePicture: worker.profile_picture,
+      role: worker.role,
+      status: worker.status,
+      createdAt: worker.created_at,
+      updatedAt: worker.updated_at,
+      lastLoginAt: worker.last_login_at,
+      workerProfile: worker.worker_profiles ? {
+        displayName: worker.worker_profiles.display_name,
+        bio: worker.worker_profiles.bio,
+        yearsExperience: worker.worker_profiles.years_experience,
+        avgRating: worker.worker_profiles.avg_rating ? parseFloat(worker.worker_profiles.avg_rating) : 0.0,
+        totalReviews: worker.worker_profiles.total_reviews,
+        verification: worker.worker_profiles.verification,
+        documentsCount: worker.worker_profiles.documents_count,
+        profileCreatedAt: worker.worker_profiles.created_at,
+        profileUpdatedAt: worker.worker_profiles.updated_at
+      } : null,
+      addresses: worker.addresses,
+      services: worker.worker_services.map(service => ({
+        id: service.id,
+        basePrice: service.base_price,
+        priceUnit: service.price_unit,
+        skills: service.skills,
+        category: service.service_sections?.name || service.service_categories?.name,
+        categorySlug: service.service_sections?.slug || service.service_categories?.slug,
+        categoryDescription: service.service_sections?.description || service.service_categories?.description,
+        createdAt: service.created_at
+      })),
+      availabilities: worker.availabilities,
+      verificationDocuments: worker.verification_documents,
+      recentReviews: worker.reviews_reviews_worker_idTousers.map(review => ({
+        id: review.id,
+        rating: review.rating,
+        comment: review.comment,
+        createdAt: review.created_at,
+        reviewer: {
+          name: review.users_reviews_reviewer_idTousers?.full_name,
+          avatar: review.users_reviews_reviewer_idTousers?.profile_picture
+        }
+      })),
+      statistics: {
+        totalHirings: worker._count.orders_orders_assigned_worker_idTousers,
+        totalPayments: worker._count.payments,
+        totalReviews: worker._count.reviews_reviews_worker_idTousers
+      }
+    };
+
+    res.status(200).json(formattedWorker);
+  } catch (error) {
+    console.error('Error fetching worker by ID:', error);
+    res.status(500).json({ error: 'Failed to fetch worker details' });
+  }
+};
+
+module.exports = { getWorkers, searchWorkers, createWorker, createWorkerService, createWorkerAvailability, updateWorkerProfile, updateWorkerService, updateAvailability, getWorkerDetails, cancelWorkRequest, acceptWorkRequest, getWorkerDashboardSummary, getWorkerDashboardTasks, getWorkerDetailsByEmail, getWorkerById };
