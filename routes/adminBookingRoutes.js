@@ -9,7 +9,10 @@ const {
      adminProcessRefund,
      adminUpdateNotes,
      adminExportBookings,
-     adminGetBookingStats
+     adminGetBookingStats,
+     adminGetAllReviews,
+     adminDeleteReview,
+     adminGetReviewsSummary
 } = require('../controllers/orderController');
 
 /**
@@ -19,6 +22,14 @@ const {
  * @query   page, limit, status, paymentStatus, search, startDate, endDate, sortBy, sortOrder
  */
 router.get('/bookings', adminGetAllBookings);
+
+/**
+ * @route   GET /api/admin/reviews
+ * @desc    Get all reviews with filters & pagination
+ * @access  Admin
+ * @query   page, limit, status, sortBy, sortOrder
+ */
+router.get('/reviews', adminGetAllReviews);
 
 /**
  * @route   GET /api/admin/bookings/stats
@@ -82,5 +93,19 @@ router.post('/bookings/:id/refund', adminProcessRefund);
  * @body    { notes: string }
  */
 router.patch('/bookings/:id/notes', adminUpdateNotes);
+
+/**
+ * @route   GET /api/admin/reviews/summary
+ * @desc    Get reviews summary (total, average rating, breakdown by rating)
+ * @access  Admin
+ */
+router.get('/reviews/summary', adminGetReviewsSummary);
+
+/**
+ * @route   DELETE /api/admin/reviews/:id
+ * @desc    Delete a review
+ * @access  Admin
+ */
+router.delete('/deleteReview/:id', adminDeleteReview);
 
 module.exports = router;

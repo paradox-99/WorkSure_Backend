@@ -854,10 +854,10 @@ const adminGetAllBookings = async (req, res) => {
                page = 1, 
                limit = 10, 
                status, 
+               category,
                paymentStatus, 
-               search,
-               startDate,
-               endDate,
+               dateFrom,
+               dateTo,
                sortBy = 'created_at',
                sortOrder = 'desc'
           } = req.query;
@@ -876,40 +876,35 @@ const adminGetAllBookings = async (req, res) => {
                where.payment_completed = paymentStatus === 'paid';
           }
 
-          if (search) {
-               where.OR = [
-                    {
-                         users_orders_client_idTousers: {
-                              full_name: {
-                                   contains: search,
-                                   mode: 'insensitive'
-                              }
-                         }
-                    },
-                    {
-                         users_orders_assigned_worker_idTousers: {
-                              full_name: {
-                                   contains: search,
-                                   mode: 'insensitive'
-                              }
-                         }
-                    },
-                    {
-                         id: {
-                              contains: search,
-                              mode: 'insensitive'
+          // Filter by category (service category slug)
+          if (category) {
+               where.users_orders_assigned_worker_idTousers = {
+                    worker_services: {
+                         some: {
+                              OR: [
+                                   {
+                                        service_categories: {
+                                             slug: category
+                                        }
+                                   },
+                                   {
+                                        service_sections: {
+                                             slug: category
+                                        }
+                                   }
+                              ]
                          }
                     }
-               ];
+               };
           }
-
-          if (startDate || endDate) {
+          
+          if (dateFrom || dateTo) {
                where.created_at = {};
-               if (startDate) {
-                    where.created_at.gte = new Date(startDate);
+               if (dateFrom) {
+                    where.created_at.gte = new Date(dateFrom);
                }
-               if (endDate) {
-                    where.created_at.lte = new Date(endDate);
+               if (dateTo) {
+                    where.created_at.lte = new Date(dateTo);
                }
           }
 
@@ -928,53 +923,40 @@ const adminGetAllBookings = async (req, res) => {
                     total_amount: true,
                     payment_completed: true,
                     created_at: true,
-                    updated_at: true,
-                    address: true,
-                    description: true,
-                    cancel_reason: true,
-                    canceled_by: true,
                     users_orders_client_idTousers: {
                          select: {
-                              id: true,
                               full_name: true,
-                              email: true,
-                              phone: true,
-                              profile_picture: true
+                              phone: true
                          }
                     },
                     users_orders_assigned_worker_idTousers: {
                          select: {
-                              id: true,
                               full_name: true,
-                              email: true,
-                              phone: true,
-                              profile_picture: true,
                               worker_profiles: {
                                    select: {
                                         display_name: true,
                                         avg_rating: true
+                                   }
+                              },
+                              worker_services: {
+                                   select: {
+                                        service_sections: {
+                                             select: {
+                                                  name: true
+                                             }
+                                        }
                                    }
                               }
                          }
                     },
                     payments: {
                          select: {
-                              id: true,
-                              amount: true,
-                              status: true,
-                              payment_method: true,
-                              trx_id: true,
-                              paid_at: true
+                              status: true
                          },
                          orderBy: {
                               created_at: 'desc'
                          },
                          take: 1
-                    },
-                    order_items: {
-                         select: {
-                              items: true
-                         }
                     }
                },
                orderBy: {
@@ -986,33 +968,22 @@ const adminGetAllBookings = async (req, res) => {
           const formattedBookings = bookings.map(booking => ({
                bookingId: booking.id,
                user: booking.users_orders_client_idTousers ? {
-                    id: booking.users_orders_client_idTousers.id,
                     name: booking.users_orders_client_idTousers.full_name,
-                    email: booking.users_orders_client_idTousers.email,
-                    phone: booking.users_orders_client_idTousers.phone,
-                    profilePicture: booking.users_orders_client_idTousers.profile_picture
+                    phone: booking.users_orders_client_idTousers.phone
                } : null,
                worker: booking.users_orders_assigned_worker_idTousers ? {
-                    id: booking.users_orders_assigned_worker_idTousers.id,
                     name: booking.users_orders_assigned_worker_idTousers.full_name,
-                    email: booking.users_orders_assigned_worker_idTousers.email,
-                    phone: booking.users_orders_assigned_worker_idTousers.phone,
-                    profilePicture: booking.users_orders_assigned_worker_idTousers.profile_picture,
                     displayName: booking.users_orders_assigned_worker_idTousers.worker_profiles?.display_name,
                     rating: booking.users_orders_assigned_worker_idTousers.worker_profiles?.avg_rating
                } : null,
-               service: booking.order_items.length > 0 ? booking.order_items[0].items : null,
+               serviceSection: booking.users_orders_assigned_worker_idTousers?.worker_services?.[0]?.service_sections ? {
+                    name: booking.users_orders_assigned_worker_idTousers.worker_services[0].service_sections.name,
+               } : null,
                scheduled: booking.selected_time,
                status: booking.status,
                paymentStatus: booking.payment_completed ? 'paid' : 'unpaid',
-               paymentDetails: booking.payments[0] || null,
-               amount: parseFloat(booking.total_amount),
                createdAt: booking.created_at,
-               updatedAt: booking.updated_at,
-               address: booking.address,
-               description: booking.description,
-               cancelReason: booking.cancel_reason,
-               canceledBy: booking.canceled_by
+               amount: booking.total_amount
           }));
 
           res.status(200).json({
@@ -1730,6 +1701,235 @@ const adminGetBookingStats = async (req, res) => {
      }
 };
 
+/**
+ * Get all reviews (Admin)
+ */
+const adminGetAllReviews = async (req, res) => {
+     try {
+          const {
+               page = 1,
+               limit = 10,
+               sortBy = 'created_at',
+               sortOrder = 'desc'
+          } = req.query;
+
+          const skip = (parseInt(page) - 1) * parseInt(limit);
+          const take = parseInt(limit);
+
+          // Build where clause
+          const where = {};
+
+          // Get total count
+          const totalCount = await prisma.reviews.count({ where });
+
+          // Fetch reviews
+          const reviews = await prisma.reviews.findMany({
+               where,
+               skip,
+               take,
+               select: {
+                    id: true, 
+                    rating: true,
+                    comment: true,
+                    created_at: true,
+                    users_reviews_user_idTousers: {
+                         select: {
+                              id: true,
+                              full_name: true
+                         }
+                    },
+                    users_reviews_worker_idTousers: {
+                         select: {
+                              id: true,
+                              full_name: true,
+                              worker_profiles: {
+                                   select: {
+                                        avg_rating: true
+                                   }
+                              }
+                         }
+                    },
+                    orders: {
+                         select: {
+                              id: true,
+                              users_orders_assigned_worker_idTousers: {
+                                   select: {
+                                        worker_services: {
+                                             select: {
+                                                  service_categories: {
+                                                       select: {
+                                                            name: true
+                                                       }
+                                                  },
+                                                  service_sections: {
+                                                       select: {
+                                                            name: true
+                                                       }
+                                                  }
+                                             }
+                                        }
+                                   }
+                              }
+                         }
+                    }
+               },
+               orderBy: {
+                    [sortBy]: sortOrder
+               }
+          });
+
+          // Format response
+          const formattedReviews = reviews.map(review => {
+               const service = review.orders?.users_orders_assigned_worker_idTousers?.worker_services?.[0];
+               
+               return {
+                    review_id: review.id,
+                    rating: review.rating,
+                    comment: review.comment,
+                    created_at: review.created_at,
+                    user: review.users_reviews_user_idTousers ? {
+                         id: review.users_reviews_user_idTousers.id,
+                         name: review.users_reviews_user_idTousers.full_name
+                    } : null,
+                    worker: review.users_reviews_worker_idTousers ? {
+                         id: review.users_reviews_worker_idTousers.id,
+                         name: review.users_reviews_worker_idTousers.full_name,
+                         avg_rating: review.users_reviews_worker_idTousers.worker_profiles?.avg_rating || 0
+                    } : null,
+                    service: service ? {
+                         category: service.service_categories?.name || null,
+                         section: service.service_sections?.name || null
+                    } : null,
+                    booking_id: review.orders?.id || null
+               };
+          });
+
+          res.status(200).json({
+               success: true,
+               data: formattedReviews,
+               pagination: {
+                    page: parseInt(page),
+                    limit: parseInt(limit),
+                    totalCount,
+                    totalPages: Math.ceil(totalCount / parseInt(limit))
+               }
+          });
+     } catch (error) {
+          console.error("Error fetching admin reviews:", error);
+          res.status(500).json({
+               success: false,
+               error: "Internal Server Error",
+               message: error.message
+          });
+     }
+};
+
+/**
+ * Delete a review (Admin)
+ */
+const adminDeleteReview = async (req, res) => {
+     try {
+          const { id } = req.params;
+
+          // Check if review exists
+          const review = await prisma.reviews.findUnique({
+               where: { id }
+          });
+
+          if (!review) {
+               return res.status(404).json({
+                    success: false,
+                    error: "Review not found"
+               });
+          }
+
+          // Delete the review
+          await prisma.reviews.delete({
+               where: { id }
+          });
+
+          res.status(200).json({
+               success: true,
+               message: "Review deleted successfully"
+          });
+     } catch (error) {
+          console.error("Error deleting review:", error);
+          res.status(500).json({
+               success: false,
+               error: "Internal Server Error",
+               message: error.message
+          });
+     }
+};
+
+/**
+ * Get reviews summary (Admin)
+ */
+const adminGetReviewsSummary = async (req, res) => {
+     try {
+          // Get total count of reviews
+          const totalReviews = await prisma.reviews.count();
+
+          // Get average rating
+          const avgRatingResult = await prisma.reviews.aggregate({
+               _avg: {
+                    rating: true
+               },
+               _sum: {
+                    rating: true
+               }
+          });
+
+          // Get count of reviews by rating
+          const ratingCounts = await prisma.reviews.groupBy({
+               by: ['rating'],
+               _count: {
+                    rating: true
+               }
+          });
+
+          // Format rating counts as an object
+          const ratingBreakdown = {
+               five: 0,
+               four: 0,
+               three: 0,
+               two: 0,
+               one: 0
+          };
+
+          ratingCounts.forEach(item => {
+               if (item.rating === 5) ratingBreakdown.five = item._count.rating;
+               else if (item.rating === 4) ratingBreakdown.four = item._count.rating;
+               else if (item.rating === 3) ratingBreakdown.three = item._count.rating;
+               else if (item.rating === 2) ratingBreakdown.two = item._count.rating;
+               else if (item.rating === 1) ratingBreakdown.one = item._count.rating;
+          });
+
+          res.status(200).json({
+               success: true,
+               data: {
+                    totalReviews,
+                    averageRating: avgRatingResult._avg.rating || 0,
+                    totalRating: avgRatingResult._sum.rating || 0,
+                    ratingBreakdown: {
+                         five: ratingBreakdown.five,
+                         four: ratingBreakdown.four,
+                         three: ratingBreakdown.three,
+                         two: ratingBreakdown.two,
+                         one: ratingBreakdown.one
+                    }
+               }
+          });
+     } catch (error) {
+          console.error("Error fetching reviews summary:", error);
+          res.status(500).json({
+               success: false,
+               error: "Internal Server Error",
+               message: error.message
+          });
+     }
+};
+
 module.exports = {
      createOrder,
      getOrders,
@@ -1755,7 +1955,11 @@ module.exports = {
      adminProcessRefund,
      adminUpdateNotes,
      adminExportBookings,
-     adminGetBookingStats
+     adminGetBookingStats,
+     // Admin review management functions
+     adminGetAllReviews,
+     adminDeleteReview,
+     adminGetReviewsSummary
 };
 
 
