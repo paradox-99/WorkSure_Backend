@@ -8,6 +8,7 @@ const orderRoutes = require('./routes/orderRoutes');
 const mailRoutes = require('./routes/mailRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const categoryRoutes = require('./routes/categoryRoutes');
+const adminBookingRoutes = require('./routes/adminBookingRoutes');
 
 const app = express();
 
@@ -29,5 +30,6 @@ app.use('/api/orderRoutes', orderRoutes);
 app.use('/api/mail', mailRoutes);
 app.use('/api/paymentRoutes', paymentRoutes);
 app.use('/api/categoryRoutes', categoryRoutes);
+app.use('/api/admin', adminBookingRoutes);
 
 module.exports = app;
