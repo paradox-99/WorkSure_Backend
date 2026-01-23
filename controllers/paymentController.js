@@ -453,6 +453,406 @@ const sslPaymentIPN = async (req, res) => {
      }
 };
 
+/**
+ * Get all payments (Admin)
+ */
+const adminGetAllPayments = async (req, res) => {
+     try {
+          const {
+               page = 1,
+               limit = 10,
+               status,
+               paymentMethod,
+               dateFrom,
+               dateTo,
+               sortBy = 'created_at',
+               sortOrder = 'desc'
+          } = req.query;
+
+          console.log(req.query);
+          
+
+          const skip = (parseInt(page) - 1) * parseInt(limit);
+          const take = parseInt(limit);
+
+          // Build where clause
+          const where = {};
+
+          if (status) {
+               where.status = status;
+          }
+
+          if (paymentMethod) {
+               where.payment_method = paymentMethod;
+          }
+
+          if (dateFrom || dateTo) {
+               where.created_at = {};
+               if (dateFrom) {
+                    where.created_at.gte = new Date(dateFrom);
+               }
+               if (dateTo) {
+                    where.created_at.lte = new Date(dateTo);
+               }
+          }
+
+          // Get total count
+          const totalCount = await prisma.payments.count({ where });
+
+          // Fetch payments
+          const payments = await prisma.payments.findMany({
+               where,
+               skip,
+               take,
+               select: {
+                    id: true,
+                    amount: true,
+                    status: true,
+                    payment_method: true,
+                    trx_id: true,
+                    paid_at: true,
+                    created_at: true,
+                    orders: {
+                         select: {
+                              id: true,
+                              status: true,
+                              users_orders_client_idTousers: {
+                                   select: {
+                                        id: true,
+                                        full_name: true,
+                                        email: true
+                                   }
+                              }
+                         }
+                    },
+                    users: {
+                         select: {
+                              id: true,
+                              full_name: true,
+                              email: true
+                         }
+                    }
+               },
+               orderBy: {
+                    [sortBy]: sortOrder
+               }
+          });
+
+          // Format response
+          const formattedPayments = payments.map(payment => ({
+               payment_id: payment.id,
+               amount: parseFloat(payment.amount),
+               status: payment.status,
+               payment_method: payment.payment_method,
+               transaction_id: payment.trx_id,
+               payer: payment.users ? {
+                    id: payment.users.id,
+                    name: payment.users.full_name,
+                    email: payment.users.email
+               } : null,
+               booking: payment.orders ? {
+                    id: payment.orders.id,
+                    status: payment.orders.status,
+                    client: payment.orders.users_orders_client_idTousers ? {
+                         id: payment.orders.users_orders_client_idTousers.id,
+                         name: payment.orders.users_orders_client_idTousers.full_name,
+                         email: payment.orders.users_orders_client_idTousers.email
+                    } : null
+               } : null,
+               paid_at: payment.paid_at,
+               created_at: payment.created_at
+          }));
+
+          res.status(200).json({
+               success: true,
+               data: formattedPayments,
+               pagination: {
+                    page: parseInt(page),
+                    limit: parseInt(limit),
+                    totalCount,
+                    totalPages: Math.ceil(totalCount / parseInt(limit))
+               }
+          });
+     } catch (error) {
+          console.error("Error fetching admin payments:", error);
+          res.status(500).json({
+               success: false,
+               error: "Internal Server Error",
+               message: error.message
+          });
+     }
+};
+
+/**
+ * Get payment details (Admin)
+ */
+const adminGetPaymentDetails = async (req, res) => {
+     try {
+          const { id } = req.params;
+
+          const payment = await prisma.payments.findUnique({
+               where: { id },
+               select: {
+                    id: true,
+                    amount: true,
+                    status: true,
+                    payment_method: true,
+                    trx_id: true,
+                    paid_at: true,
+                    created_at: true,
+                    orders: {
+                         select: {
+                              id: true,
+                              status: true,
+                              total_amount: true,
+                              description: true,
+                              address: true,
+                              selected_time: true,
+                              created_at: true,
+                              users_orders_client_idTousers: {
+                                   select: {
+                                        id: true,
+                                        full_name: true,
+                                        email: true,
+                                        phone: true,
+                                        profile_picture: true
+                                   }
+                              },
+                              users_orders_assigned_worker_idTousers: {
+                                   select: {
+                                        id: true,
+                                        full_name: true,
+                                        email: true,
+                                        phone: true,
+                                        profile_picture: true,
+                                        worker_profiles: {
+                                             select: {
+                                                  avg_rating: true
+                                             }
+                                        }
+                                   }
+                              }
+                         }
+                    },
+                    users: {
+                         select: {
+                              id: true,
+                              full_name: true,
+                              email: true,
+                              phone: true
+                         }
+                    }
+               }
+          });
+
+          if (!payment) {
+               return res.status(404).json({
+                    success: false,
+                    error: "Payment not found"
+               });
+          }
+
+          res.status(200).json({
+               success: true,
+               payment
+          });
+     } catch (error) {
+          console.error("Error fetching payment details:", error);
+          res.status(500).json({
+               success: false,
+               error: "Internal Server Error",
+               message: error.message
+          });
+     }
+};
+
+/**
+ * Get payments summary (Admin)
+ */
+const adminGetPaymentsSummary = async (req, res) => {
+     try {
+          const { dateFrom, dateTo } = req.query;
+
+          const where = {};
+
+          if (dateFrom || dateTo) {
+               where.created_at = {};
+               if (dateFrom) {
+                    where.created_at.gte = new Date(dateFrom);
+               }
+               if (dateTo) {
+                    where.created_at.lte = new Date(dateTo);
+               }
+          }
+
+          // Get total payments count
+          const totalPayments = await prisma.payments.count({ where });
+
+          // Get total revenue
+          const revenueResult = await prisma.payments.aggregate({
+               where: { ...where, status: 'paid' },
+               _sum: {
+                    amount: true
+               }
+          });
+
+          // Get payment status breakdown
+          const statusBreakdown = await prisma.payments.groupBy({
+               by: ['status'],
+               where,
+               _count: {
+                    status: true
+               },
+               _sum: {
+                    amount: true
+               }
+          });
+
+          // Get payment method breakdown
+          const methodBreakdown = await prisma.payments.groupBy({
+               by: ['payment_method'],
+               where,
+               _count: {
+                    payment_method: true
+               },
+               _sum: {
+                    amount: true
+               }
+          });
+
+          // Format status breakdown
+          const formattedStatusBreakdown = statusBreakdown.reduce((acc, item) => {
+               acc[item.status] = {
+                    count: item._count.status,
+                    total: parseFloat(item._sum.amount || 0)
+               };
+               return acc;
+          }, {});
+
+          // Format method breakdown
+          const formattedMethodBreakdown = methodBreakdown.reduce((acc, item) => {
+               acc[item.payment_method] = {
+                    count: item._count.payment_method,
+                    total: parseFloat(item._sum.amount || 0)
+               };
+               return acc;
+          }, {});
+
+          res.status(200).json({
+               success: true,
+               data: {
+                    totalPayments,
+                    totalRevenue: parseFloat(revenueResult._sum.amount || 0),
+                    statusBreakdown: formattedStatusBreakdown,
+                    methodBreakdown: formattedMethodBreakdown
+               }
+          });
+     } catch (error) {
+          console.error("Error fetching payments summary:", error);
+          res.status(500).json({
+               success: false,
+               error: "Internal Server Error",
+               message: error.message
+          });
+     }
+};
+
+/**
+ * Refund payment / Admin action (Admin)
+ */
+const adminRefundPayment = async (req, res) => {
+     try {
+          const { id } = req.params;
+          const { refundAmount, refundReason } = req.body;
+
+          // Validate required fields
+          if (!refundReason) {
+               return res.status(400).json({
+                    success: false,
+                    error: "Refund reason is required"
+               });
+          }
+
+          // Get payment details
+          const payment = await prisma.payments.findUnique({
+               where: { id },
+               select: {
+                    id: true,
+                    amount: true,
+                    status: true,
+                    order_id: true
+               }
+          });
+
+          if (!payment) {
+               return res.status(404).json({
+                    success: false,
+                    error: "Payment not found"
+               });
+          }
+
+          if (payment.status !== 'paid') {
+               return res.status(400).json({
+                    success: false,
+                    error: "Only paid payments can be refunded"
+               });
+          }
+
+          const refundAmountDecimal = refundAmount ? parseFloat(refundAmount) : parseFloat(payment.amount);
+
+          if (refundAmountDecimal > parseFloat(payment.amount)) {
+               return res.status(400).json({
+                    success: false,
+                    error: "Refund amount cannot exceed payment amount"
+               });
+          }
+
+          // Update payment status to refunded
+          const updatedPayment = await prisma.payments.update({
+               where: { id },
+               data: {
+                    status: 'refunded',
+                    paid_at: new Date()
+               },
+               select: {
+                    id: true,
+                    amount: true,
+                    status: true,
+                    payment_method: true
+               }
+          });
+
+          // Update order payment status if full refund
+          if (refundAmountDecimal === parseFloat(payment.amount) && payment.order_id) {
+               await prisma.orders.update({
+                    where: { id: payment.order_id },
+                    data: {
+                         payment_completed: false,
+                         updated_at: new Date()
+                    }
+               });
+          }
+
+          res.status(200).json({
+               success: true,
+               message: `Payment refunded successfully. Refund amount: ${refundAmountDecimal}`,
+               data: {
+                    payment_id: updatedPayment.id,
+                    refund_amount: refundAmountDecimal,
+                    reason: refundReason,
+                    payment_status: updatedPayment.status
+               }
+          });
+     } catch (error) {
+          console.error("Error refunding payment:", error);
+          res.status(500).json({
+               success: false,
+               error: "Internal Server Error",
+               message: error.message
+          });
+     }
+};
+
 module.exports = {
      paymentOnHand,
      verifyPayment,
@@ -460,5 +860,10 @@ module.exports = {
      sslPaymentSuccess,
      sslPaymentFail,
      sslPaymentCancel,
-     sslPaymentIPN
+     sslPaymentIPN,
+     // Admin payment management functions
+     adminGetAllPayments,
+     adminGetPaymentDetails,
+     adminGetPaymentsSummary,
+     adminRefundPayment
 };
