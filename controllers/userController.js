@@ -1,5 +1,4 @@
 const prisma = require('../config/prisma');
-const { user_role } = require('../generated/prisma');
 
 const getUsers = async (req, res) => {
      try {
@@ -329,8 +328,8 @@ const suspendUser = async (req, res) => {
           // Validate status value
           const validStatuses = ['active', 'suspended', 'inactive'];
           if (status && !validStatuses.includes(status)) {
-               return res.status(400).json({ 
-                    error: "Invalid status. Must be 'active', 'suspended', or 'inactive'" 
+               return res.status(400).json({
+                    error: "Invalid status. Must be 'active', 'suspended', or 'inactive'"
                });
           }
 
@@ -347,7 +346,7 @@ const suspendUser = async (req, res) => {
           // Update user status
           const updatedUser = await prisma.users.update({
                where: { id },
-               data: { 
+               data: {
                     status: status || 'suspended',
                     updated_at: new Date()
                },
@@ -378,8 +377,8 @@ const activateUser = async (req, res) => {
           // Validate status value
           const validStatuses = ['active', 'suspended', 'inactive'];
           if (status && !validStatuses.includes(status)) {
-               return res.status(400).json({ 
-                    error: "Invalid status. Must be 'active', 'suspended', or 'inactive'" 
+               return res.status(400).json({
+                    error: "Invalid status. Must be 'active', 'suspended', or 'inactive'"
                });
           }
 
@@ -396,7 +395,7 @@ const activateUser = async (req, res) => {
           // Update user status
           const updatedUser = await prisma.users.update({
                where: { id },
-               data: { 
+               data: {
                     status: status || 'active',
                     updated_at: new Date()
                },
@@ -447,4 +446,105 @@ const getUserByEmail = async (req, res) => {
      }
 }
 
-module.exports = { getUsers, createUser, updateAddress, updateUser, getUserData, getUserById, suspendUser, activateUser, getUserByEmail, createworker };
+const checkWorkerAvailability = async (req, res) => {
+     const { workerId, selectedTime } = req.body;
+     const startTime = new Date(selectedTime);
+     const endTime = new Date(startTime.getTime() + 60 * 90 * 1000); // Assuming 1.5 hour booking duration
+     
+     try {
+          // Fetch worker's availability settings
+          const workerAvailability = await prisma.availabilities.findFirst({
+               where: { user_id: workerId }
+          });
+
+          console.log(workerAvailability);
+          
+
+          if (!workerAvailability) {
+               return res.status(404).json({ 
+                    available: false, 
+                    message: "Worker availability not configured" 
+               });
+          }
+
+
+          // Get day of week from selected time using UTC (0 = Sunday, 1 = Monday, ..., 6 = Saturday)
+          const dayOfWeek = startTime.getUTCDay();
+          console.log("Day of week (UTC):", dayOfWeek, "Date:", startTime.toISOString());
+          
+          // Standard day names in lowercase for comparison
+          const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+          const selectedDay = dayNames[dayOfWeek];
+          console.log("Selected day:", selectedDay);
+          
+          // Normalize weekend array to lowercase for case-insensitive comparison
+          const normalizedWeekend = workerAvailability.weekend?.map(day => day.toLowerCase().trim()) || [];
+          console.log("Normalized weekend:", normalizedWeekend);
+          
+          // Check if selected date is weekend
+          if (normalizedWeekend.includes(selectedDay)) {
+               console.log("inside weekend check");
+               
+               return res.status(200).json({ 
+                    available: false, 
+                    message: `Worker is not available on ${selectedDay.charAt(0).toUpperCase() + selectedDay.slice(1)}s (weekend)` 
+               });
+          }
+
+          // Extract time components from selected time (use UTC to match DB storage)
+          const selectedHour = startTime.getHours();
+          const selectedMinute = startTime.getMinutes();
+          const selectedTimeInMinutes = selectedHour * 60 + selectedMinute;
+
+          // Extract working hours from stored availability (use UTC as stored in DB)
+          const availableFromTime = new Date(workerAvailability.available_from);
+          const availableToTime = new Date(workerAvailability.available_to);
+
+          const workStartHour = availableFromTime.getUTCHours();
+          const workStartMinute = availableFromTime.getUTCMinutes();
+          const workStartInMinutes = workStartHour * 60 + workStartMinute;
+
+          const workEndHour = availableToTime.getUTCHours();
+          const workEndMinute = availableToTime.getUTCMinutes();
+          const workEndInMinutes = workEndHour * 60 + workEndMinute;
+
+          const endTimeInMinutes = endTime.getHours() * 60 + endTime.getMinutes();
+
+          // Check if selected time is within working hours
+          if (selectedTimeInMinutes < workStartInMinutes || endTimeInMinutes > workEndInMinutes) {
+               return res.status(200).json({ 
+                    available: false,  
+                    message: `Selected time is outside worker's working hours (${workStartHour}:${String(workStartMinute).padStart(2, '0')} - ${workEndHour}:${String(workEndMinute).padStart(2, '0')})` 
+               });
+          }
+
+          // Check for overlapping bookings
+          const overlappingBookings = await prisma.orders.findMany({
+               where: {
+                    assigned_worker_id: workerId,
+                    status: {
+                         in: ['accepted', 'in_progress']
+                    },
+                    AND: [
+                         // Check if selected_time of existing booking is between new booking's start and end
+                         {
+                              selected_time: {
+                                   gte: startTime,
+                                   lt: endTime
+                              }
+                         }
+                    ]
+               }
+          });
+          if (overlappingBookings.length > 0) {
+               return res.status(200).json({ available: false, message: "Worker is not available at the selected time (booking conflict)." });
+          }
+
+          res.status(200).json({ available: true, message: "Worker is available at the selected time." });   
+     } catch (error) {
+          console.error("Error checking worker availability:", error);
+          res.status(500).json({ error: "Failed to check worker availability" });
+     }
+};
+
+module.exports = { getUsers, createUser, updateAddress, updateUser, getUserData, getUserById, suspendUser, activateUser, getUserByEmail, createworker, checkWorkerAvailability };
