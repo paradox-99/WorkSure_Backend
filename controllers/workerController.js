@@ -374,7 +374,7 @@ const getWorkerDetails = async (req, res) => {
             id: true,
             rating: true,
             comment: true,
-            users_reviews_reviewer_idTousers: {
+            users_reviews_user_idTousers: {
               select: {
                 id: true,
                 full_name: true,
