@@ -24,6 +24,7 @@
     "sslcommerz-lts": "^1.2.0"
   },
   "devDependencies": {
+    "nodemon": "^3.1.11",
     "prisma": "^7.1.0"
   }
 }

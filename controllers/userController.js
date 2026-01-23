@@ -1,4 +1,5 @@
 const prisma = require('../config/prisma');
+const { user_role } = require('../generated/prisma');
 
 const getUsers = async (req, res) => {
      try {
@@ -418,4 +419,32 @@ const activateUser = async (req, res) => {
      }
 };
 
-module.exports = { getUsers, createUser, updateAddress, updateUser, getUserData, getUserById, suspendUser, activateUser };
+const getUserByEmail = async (req, res) => {
+     const { email } = req.params;
+
+     try {
+          const user = await prisma.users.findUnique({
+               where: {
+                    email
+               },
+               select: {
+                    id: true,
+                    full_name: true,
+                    profile_picture: true,
+                    email: true,
+                    role: true
+               }
+          });
+
+          if (!user) {
+               return res.status(404).json({ error: "User not found" });
+          }
+
+          res.status(200).json(user);
+     } catch (error) {
+          console.error("Error fetching user by email:", error);
+          res.status(500).json({ error: "Failed to fetch user data" });
+     }
+}
+
+module.exports = { getUsers, createUser, updateAddress, updateUser, getUserData, getUserById, suspendUser, activateUser, getUserByEmail, createworker };
