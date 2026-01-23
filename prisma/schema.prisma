@@ -92,7 +92,7 @@ model payments {
   users          users?          @relation(fields: [payer_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([trx_id], map: "idx_payments_gateway_id")
-  @@index([order_id], map: "idx_payments_order")
+  @@index([order_id], map: "idx_payments_order")  
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.

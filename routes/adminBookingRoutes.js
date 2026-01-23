@@ -14,6 +14,12 @@ const {
      adminDeleteReview,
      adminGetReviewsSummary
 } = require('../controllers/orderController');
+const {
+     adminGetAllPayments,
+     adminGetPaymentDetails,
+     adminGetPaymentsSummary,
+     adminRefundPayment
+} = require('../controllers/paymentController');
 
 /**
  * @route   GET /api/admin/bookings
@@ -107,5 +113,36 @@ router.get('/reviews/summary', adminGetReviewsSummary);
  * @access  Admin
  */
 router.delete('/deleteReview/:id', adminDeleteReview);
+
+/**
+ * @route   GET /api/admin/payments
+ * @desc    Get all payments with filters & pagination
+ * @access  Admin
+ * @query   page, limit, status, paymentMethod, dateFrom, dateTo, sortBy, sortOrder
+ */
+router.get('/payments', adminGetAllPayments);
+
+/**
+ * @route   GET /api/admin/payments/summary
+ * @desc    Get payments summary (total, revenue, status breakdown, method breakdown)
+ * @access  Admin
+ * @query   dateFrom, dateTo
+ */
+router.get('/payments/summary', adminGetPaymentsSummary);
+
+/**
+ * @route   GET /api/admin/payments/:id
+ * @desc    Get payment details
+ * @access  Admin
+ */
+router.get('/payments/:id', adminGetPaymentDetails);
+
+/**
+ * @route   POST /api/admin/payments/:id/refund
+ * @desc    Refund payment (admin action)
+ * @access  Admin
+ * @body    { refundAmount?: number, refundReason: string }
+ */
+router.post('/payments/:id/refund', adminRefundPayment);
 
 module.exports = router;
