@@ -90,9 +90,10 @@ model payments {
   created_at     DateTime?       @default(now()) @db.Timestamptz(6)
   orders         orders?         @relation(fields: [order_id], references: [id], onUpdate: NoAction)
   users          users?          @relation(fields: [payer_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  refunds        refunds[]
 
   @@index([trx_id], map: "idx_payments_gateway_id")
-  @@index([order_id], map: "idx_payments_order")  
+  @@index([order_id], map: "idx_payments_order")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -243,6 +244,25 @@ model order_items {
   @@index([items], map: "idx_order_items_items", type: Gin)
 }
 
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model refunds {
+  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  payment_id    String        @db.Uuid
+  trx_id        String        @db.VarChar(255)
+  refund_amount Decimal       @db.Decimal(10, 2)
+  refund_reason String?
+  refund_ref_id String?       @db.VarChar(100)
+  refund_status refund_status @default(pending)
+  created_at    DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime?     @db.Timestamptz(6)
+  completed_at  DateTime?     @db.Timestamptz(6)
+  payments      payments      @relation(fields: [payment_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_refunds_payment")
+
+  @@index([payment_id], map: "idx_refunds_payment_id")
+  @@index([refund_status], map: "idx_refunds_status")
+  @@index([trx_id], map: "idx_refunds_tran_id")
+}
+
 enum booking_status {
   cart
   pending
@@ -297,4 +317,11 @@ enum section_status {
   active
   inactive
   disabled
+}
+
+enum refund_status {
+  pending
+  processing
+  success
+  failed
 }
