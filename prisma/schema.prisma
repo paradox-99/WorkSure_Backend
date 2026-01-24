@@ -67,6 +67,8 @@ model orders {
   canceled_by                            String?
   items_approval                         Boolean?
   is_reviewed                            Boolean?
+  is_complained                          Boolean?       @default(false)
+  complain_id                            String?        @db.Uuid
   order_items                            order_items[]
   users_orders_assigned_worker_idTousers users?         @relation("orders_assigned_worker_idTousers", fields: [assigned_worker_id], references: [id], onUpdate: NoAction)
   users_orders_client_idTousers          users?         @relation("orders_client_idTousers", fields: [client_id], references: [id], onUpdate: NoAction)
@@ -275,7 +277,6 @@ model complaints {
   category          String          @db.VarChar(50)
   sub_category      String?         @db.VarChar(50)
   priority          String?         @default("medium") @db.VarChar(20)
-  subject           String          @db.VarChar(150)
   description       String
   attachments       Json?
   status            complain_status @default(open)
@@ -284,6 +285,10 @@ model complaints {
   created_at        DateTime?       @default(now()) @db.Timestamptz(6)
   updated_at        DateTime?       @default(now()) @db.Timestamptz(6)
   resolved_at       DateTime?       @db.Timestamptz(6)
+
+  @@index([booking_id], map: "idx_complaints_booking")
+  @@index([created_at], map: "idx_complaints_created")
+  @@index([status], map: "idx_complaints_status")
 }
 
 enum booking_status {

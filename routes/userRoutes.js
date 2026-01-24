@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const {getUsers, createUser, updateAddress, updateUser, getUserData, getUserById, suspendUser, activateUser, getUserByEmail, checkWorkerAvailability, createReview, createComplaint} = require('../controllers/userController');
+const {getUsers, createUser, updateAddress, updateUser, getUserData, getUserById, suspendUser, activateUser, getUserByEmail, checkWorkerAvailability, createReview, createComplaint, getComplaintDetails} = require('../controllers/userController');
 
 router.get('/users', getUsers);
 router.get('/adminGetUserData/:id', getUserById);
@@ -14,5 +14,6 @@ router.get('/getUserByEmail/:email', getUserByEmail);
 router.post('/checkWorkerAvailability', checkWorkerAvailability);
 router.post('/createReview', createReview);
 router.post('/createComplaint', createComplaint);
+router.get('/getComplaintDetails/:complaintId', getComplaintDetails);
 
 module.exports = router;

@@ -327,6 +327,8 @@ const getUserOrder = async (req, res) => {
                     work_start: true,
                     work_end: true,
                     is_reviewed: true,
+                    is_complained: true,
+                    complain_id: true,
                     users_orders_assigned_worker_idTousers: {
                          select: {
                               id: true,
@@ -387,6 +389,9 @@ const getWorkerHirings = async (req, res) => {
                     updated_at: true,
                     work_start: true,
                     work_end: true,
+                    is_reviewed: true,
+                    is_complained: true,
+                    complain_id: true,
                     users_orders_client_idTousers: {
                          select: {
                               id: true,
