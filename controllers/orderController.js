@@ -326,6 +326,7 @@ const getUserOrder = async (req, res) => {
                     updated_at: true,
                     work_start: true,
                     work_end: true,
+                    is_reviewed: true,
                     users_orders_assigned_worker_idTousers: {
                          select: {
                               id: true,
@@ -801,21 +802,91 @@ const getAwaitingWorkDetails = async (req, res) => {
      const { orderId } = req.params;
 
      try {
-          // Fetch order with total amount
+          // Fetch order with full details including reviews and ratings
           const order = await prisma.orders.findUnique({
                where: { id: orderId },
                select: {
                     id: true,
-                    total_amount: true,
+                    client_id: true,
+                    assigned_worker_id: true,
                     status: true,
+                    work_start: true,
+                    work_end: true,
+                    total_amount: true,
+                    description: true,
+                    address: true,
+                    selected_time: true,
+                    payment_completed: true,
+                    cancel_reason: true,
+                    canceled_by: true,
                     items_approval: true,
+                    created_at: true,
+                    updated_at: true,
+                    users_orders_client_idTousers: {
+                         select: {
+                              id: true,
+                              full_name: true,
+                              email: true,
+                              phone: true,
+                              profile_picture: true
+                         }
+                    },
+                    users_orders_assigned_worker_idTousers: {
+                         select: {
+                              id: true,
+                              full_name: true,
+                              email: true,
+                              phone: true,
+                              profile_picture: true,
+                              worker_profiles: {
+                                   select: {
+                                        display_name: true,
+                                        bio: true,
+                                        years_experience: true,
+                                        avg_rating: true,
+                                        total_reviews: true,
+                                        verification: true
+                                   }
+                              }
+                         }
+                    },
                     order_items: {
                          select: {
                               id: true,
                               items: true,
                               additional_notes: true,
                               verified: true,
+                              created_at: true,
+                              updated_at: true
+                         }
+                    },
+                    payments: {
+                         select: {
+                              id: true,
+                              amount: true,
+                              status: true,
+                              payment_method: true,
+                              trx_id: true,
+                              paid_at: true,
                               created_at: true
+                         },
+                         orderBy: {
+                              created_at: 'desc'
+                         }
+                    },
+                    reviews: {
+                         select: {
+                              id: true,
+                              rating: true,
+                              comment: true,
+                              created_at: true,
+                              users_reviews_user_idTousers: {
+                                   select: {
+                                        id: true,
+                                        full_name: true,
+                                        profile_picture: true
+                                   }
+                              }
                          }
                     }
                }
@@ -824,7 +895,6 @@ const getAwaitingWorkDetails = async (req, res) => {
           if (!order) {
                return res.status(404).json({ error: "Order not found" });
           }
-
 
           res.status(200).json({
                order

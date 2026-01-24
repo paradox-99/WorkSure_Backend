@@ -547,4 +547,141 @@ const checkWorkerAvailability = async (req, res) => {
      }
 };
 
-module.exports = { getUsers, createUser, updateAddress, updateUser, getUserData, getUserById, suspendUser, activateUser, getUserByEmail, createworker, checkWorkerAvailability };
+const createReview = async (req, res) => {
+     try {
+          const { orderId, userId, workerId, rating, comment } = req.body;
+
+          // Validate required fields
+          if (!orderId || !userId || !workerId || !rating) {
+               return res.status(400).json({ error: "Missing required fields: orderId, userId, workerId, and rating are required" });
+          }
+
+          // Validate rating range
+          if (rating < 1 || rating > 5) {
+               return res.status(400).json({ error: "Rating must be between 1 and 5" });
+          }
+
+          // Check if the order exists
+          const order = await prisma.orders.findUnique({
+               where: { id: orderId },
+               select: {
+                    id: true,
+                    client_id: true,
+                    assigned_worker_id: true,
+                    status: true
+               }
+          });
+
+          if (!order) {
+               return res.status(404).json({ error: "Order not found" });
+          }
+
+          // Verify that the user is the client of this order
+          if (order.client_id !== userId) {
+               return res.status(403).json({ error: "You can only review orders that you placed" });
+          }
+
+          // Verify that the workerId matches the assigned worker
+          if (order.assigned_worker_id !== workerId) {
+               return res.status(400).json({ error: "Worker ID does not match the assigned worker for this order" });
+          }
+
+          // Check if the order is completed
+          if (order.status !== 'completed') {
+               return res.status(400).json({ error: "You can only review completed orders" });
+          }
+
+          // Check if a review already exists for this order
+          const existingReview = await prisma.reviews.findFirst({
+               where: {
+                    order_id: orderId,
+                    user_id: userId
+               }
+          });
+
+          if (existingReview) {
+               return res.status(409).json({ error: "You have already reviewed this order" });
+          }
+
+          // Create the review
+          const review = await prisma.reviews.create({
+               data: {
+                    order_id: orderId,
+                    user_id: userId,
+                    worker_id: workerId,
+                    rating: parseInt(rating),
+                    comment: comment || null
+               },
+               include: {
+                    users_reviews_user_idTousers: {
+                         select: {
+                              id: true,
+                              full_name: true,
+                              profile_picture: true
+                         }
+                    },
+                    users_reviews_worker_idTousers: {
+                         select: {
+                              id: true,
+                              full_name: true,
+                              profile_picture: true
+                         }
+                    }
+               }
+          });
+
+          // Update worker's average rating and total reviews
+          const workerReviews = await prisma.reviews.aggregate({
+               where: { worker_id: workerId },
+               _avg: { rating: true },
+               _count: { rating: true }
+          });
+
+          await prisma.worker_profiles.update({
+               where: { user_id: workerId },
+               data: {
+                    avg_rating: workerReviews._avg.rating || 0,
+                    total_reviews: workerReviews._count.rating || 0
+               }
+          });
+
+          await prisma.orders.update({
+               where: { id: orderId },
+               data: {
+                    reviewed: true
+               }
+          });
+
+
+          res.status(201).json({
+               message: "Review created successfully",
+               review: {
+                    id: review.id,
+                    orderId: review.order_id,
+                    rating: review.rating,
+                    comment: review.comment,
+                    createdAt: review.created_at,
+                    reviewer: {
+                         id: review.users_reviews_user_idTousers.id,
+                         name: review.users_reviews_user_idTousers.full_name,
+                         avatar: review.users_reviews_user_idTousers.profile_picture
+                    },
+                    worker: {
+                         id: review.users_reviews_worker_idTousers.id,
+                         name: review.users_reviews_worker_idTousers.full_name,
+                         avatar: review.users_reviews_worker_idTousers.profile_picture
+                    }
+               }
+          });
+
+     } catch (error) {
+          console.error("Error creating review:", error);
+          res.status(500).json({ error: "Failed to create review" });
+     }
+};
+
+const createComplaint = async (req, res) => {
+     // Implementation for creating a complaint
+}
+
+module.exports = { getUsers, createUser, updateAddress, updateUser, getUserData, getUserById, suspendUser, activateUser, getUserByEmail, createworker, checkWorkerAvailability, createReview, createComplaint };
