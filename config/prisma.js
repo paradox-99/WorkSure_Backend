@@ -9,7 +9,7 @@ const globalForPrisma = globalThis;
 if (!globalForPrisma.prisma) {
   // 1. Create a Postgres connection pool with proper limits
   const pool = new Pool({ 
-    connectionString: process.env.URL,
+    connectionString: process.env.DATABASE_URL,
     max: 20,              // Maximum number of connections in the pool (increased from 10)
     min: 2,               // Minimum number of connections to keep alive
     idleTimeoutMillis: 30000,  // Close idle connections after 30 seconds (reduced from 60)
