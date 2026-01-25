@@ -61,55 +61,60 @@ const getSummaryCards = async (workerId) => {
     const today = new Date();
     const { startOfDay, endOfDay } = getDayBounds(today);
     
-    // Get today's appointments count
-    const todaysAppointments = await prisma.orders.count({
-        where: {
-            assigned_worker_id: workerId,
-            // selected_time: {
-            //     gte: startOfDay,
-            //     lte: endOfDay
-            // },
-            status: {
-                in: ['accepted', 'in_progress']
-            }
-        }
-    });
-    
-    // Get confirmed count (accepted or in_progress)
-    const confirmed = await prisma.orders.count({
-        where: {
-            assigned_worker_id: workerId,
-            selected_time: {
-                gte: startOfDay,
-                lte: endOfDay
-            },
-            status: {
-                in: ['accepted', 'in_progress']
-            }
-        }
-    });
-    
-    // Get pending count
-    const pending = await prisma.orders.count({
-        where: {
-            assigned_worker_id: workerId,
-            status: 'pending'
-        }
-    });
+    // Execute all count queries in a transaction for efficiency
+    const result = await prisma.$transaction(async (tx) => {
+        const [todaysAppointments, confirmed, pending, completed] = await Promise.all([
+            // Get today's appointments count
+            tx.orders.count({
+                where: {
+                    assigned_worker_id: workerId,
+                    // selected_time: {
+                    //     gte: startOfDay,
+                    //     lte: endOfDay
+                    // },
+                    status: {
+                        in: ['accepted', 'in_progress']
+                    }
+                }
+            }),
+            // Get confirmed count (accepted or in_progress)
+            tx.orders.count({
+                where: {
+                    assigned_worker_id: workerId,
+                    selected_time: {
+                        gte: startOfDay,
+                        lte: endOfDay
+                    },
+                    status: {
+                        in: ['accepted', 'in_progress']
+                    }
+                }
+            }),
+            // Get pending count
+            tx.orders.count({
+                where: {
+                    assigned_worker_id: workerId,
+                    status: 'pending'
+                }
+            }),
+            // Get completed count
+            tx.orders.count({
+                where: {
+                    assigned_worker_id: workerId,
+                    status: 'completed'
+                }
+            })
+        ]);
 
-    const completed = await prisma.orders.count({
-        where: {
-            assigned_worker_id: workerId,
-            status: 'completed'
-        }
+        return {
+            todaysAppointments,
+            confirmed,
+            pending,
+            completed
+        };
     });
     
-    return {
-        todaysAppointments,
-        confirmed,
-        pending,
-        completed
-    };
+    return result;
 };
 
 /**
@@ -286,12 +291,138 @@ const getSummaryOnly = async (workerId) => {
  * @returns {Promise<Object>}
  */
 const getTasksAndRequests = async (workerId) => {
-    // Execute all queries in parallel for efficiency
-    const [todaysWorks, upcomingWorks, serviceRequests] = await Promise.all([
-        getTodaysWorks(workerId),
-        getUpcomingWorks(workerId),
-        getServiceRequests(workerId)
-    ]);
+    const today = new Date();
+    const { endOfDay } = getDayBounds(today);
+
+    // Execute all queries in a single transaction (uses one connection)
+    const [todaysOrders, upcomingOrders, pendingOrders] = await prisma.$transaction(async (tx) => {
+        return Promise.all([
+            // Today's works
+            tx.orders.findMany({
+                where: {
+                    assigned_worker_id: workerId,
+                    status: {
+                        in: ['accepted', 'in_progress']
+                    }
+                },
+                select: {
+                    id: true,
+                    selected_time: true,
+                    address: true,
+                    status: true,
+                    description: true,
+                    users_orders_client_idTousers: {
+                        select: {
+                            id: true,
+                            full_name: true,
+                            email: true,
+                            phone: true,
+                            profile_picture: true
+                        }
+                    }
+                },
+                orderBy: {
+                    selected_time: 'asc'
+                }
+            }),
+            // Upcoming works
+            tx.orders.findMany({
+                where: {
+                    assigned_worker_id: workerId,
+                    selected_time: {
+                        gt: endOfDay
+                    },
+                    status: {
+                        in: ['accepted']
+                    }
+                },
+                select: {
+                    id: true,
+                    selected_time: true,
+                    address: true,
+                    status: true,
+                    description: true,
+                    users_orders_client_idTousers: {
+                        select: {
+                            id: true,
+                            full_name: true,
+                            email: true,
+                            profile_picture: true
+                        }
+                    }
+                },
+                orderBy: {
+                    selected_time: 'asc'
+                },
+                take: 10
+            }),
+            // Service requests (pending)
+            tx.orders.findMany({
+                where: {
+                    assigned_worker_id: workerId,
+                    status: 'pending'
+                },
+                select: {
+                    id: true,
+                    description: true,
+                    address: true,
+                    selected_time: true,
+                    created_at: true,
+                    users_orders_client_idTousers: {
+                        select: {
+                            id: true,
+                            full_name: true,
+                            email: true,
+                            phone: true,
+                            profile_picture: true
+                        }
+                    }
+                },
+                orderBy: {
+                    created_at: 'desc'
+                },
+                take: 10
+            })
+        ]);
+    });
+
+    // Transform the data
+    const todaysWorks = todaysOrders.map(order => ({
+        booking_id: order.id,
+        client_name: order.users_orders_client_idTousers?.full_name || 'Unknown',
+        client_email: order.users_orders_client_idTousers?.email || null,
+        client_phone: order.users_orders_client_idTousers?.phone || null,
+        client_picture: order.users_orders_client_idTousers?.profile_picture || null,
+        service_name: order.description || 'Service',
+        start_time: order.selected_time,
+        countdown: order.selected_time ? calculateCountdown(order.selected_time) : null,
+        location: order.address || 'Not specified',
+        status: order.status
+    }));
+
+    const upcomingWorks = upcomingOrders.map(order => ({
+        booking_id: order.id,
+        client_name: order.users_orders_client_idTousers?.full_name || 'Unknown',
+        client_picture: order.users_orders_client_idTousers?.profile_picture || null,
+        service_name: order.description || 'Service',
+        date_time: order.selected_time,
+        days_until: order.selected_time ? calculateDaysUntil(order.selected_time) : null,
+        location: order.address || 'Not specified',
+        status: order.status
+    }));
+
+    const serviceRequests = pendingOrders.map(order => ({
+        request_id: order.id,
+        user_name: order.users_orders_client_idTousers?.full_name || 'Unknown',
+        client_picture: order.users_orders_client_idTousers?.profile_picture || null,
+        task_name: order.description || 'Service Request',
+        location: order.address || 'Not specified',
+        email: order.users_orders_client_idTousers?.email || null,
+        phone: order.users_orders_client_idTousers?.phone || null,
+        scheduled_time: order.selected_time,
+        requested_at: order.created_at,
+        status: 'PENDING'
+    }));
     
     return {
         todaysWorks,

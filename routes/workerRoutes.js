@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const {getWorkers, createWorker, createWorkerAvailability, createWorkerService, searchWorkers, updateWorkerProfile,updateWorkerService, updateAvailability, getWorkerDetails, getWorkerDashboardSummary, getWorkerDashboardTasks, getWorkerDetailsByEmail, getWorkerById, verifyWorker, suspendWorker, rejectWorker, activateWorker} = require('../controllers/workerController');
+const {getWorkers, createWorker, createWorkerAvailability, createWorkerService, searchWorkers, updateWorkerProfile,updateWorkerService, updateAvailability, getWorkerDetails, getWorkerDashboardSummary, getWorkerDashboardTasks, getWorkerDetailsByEmail, getWorkerById, verifyWorker, suspendWorker, rejectWorker, activateWorker, getWorkerNotifications, markNotificationAsRead, markAllNotificationsAsRead, getWorkerReviews} = require('../controllers/workerController');
 const { getWorkerHirings, getWorkerRequests } = require('../controllers/orderController');
 
 router.get('/workers', getWorkers);
@@ -25,5 +25,13 @@ router.get('/hirings/requests/:email', getWorkerRequests);
 router.get('/dashboard/summary/:email', getWorkerDashboardSummary);
 router.get('/dashboard/tasks/:email', getWorkerDashboardTasks);
 router.get('/dashboard/details/:email', getWorkerDetailsByEmail);
+
+// Worker Reviews Route
+router.get('/reviews/:workerId', getWorkerReviews);
+
+// Worker Notification Routes
+router.get('/notifications/:id', getWorkerNotifications);
+router.patch('/notifications/:id/read', markNotificationAsRead);
+router.patch('/notifications/read-all/:id', markAllNotificationsAsRead);
 
 module.exports = router;

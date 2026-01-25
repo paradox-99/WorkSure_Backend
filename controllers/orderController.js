@@ -1,5 +1,5 @@
 const prisma = require("../config/prisma");
-const { sendHiringRequestEmail } = require("./mailController");
+const { sendHiringRequestEmail, sendRequestAcceptedEmail, sendRequestCancelledEmail } = require("./mailController");
 
 const createOrder = async (req, res) => {
      const { client_email, worker_id, selected_time, address, description, total_amount } = req.body;
@@ -51,6 +51,18 @@ const createOrder = async (req, res) => {
                selectedTime: selected_time
           }).catch(err => {
                console.error('Failed to send hiring request email:', err);
+          });
+
+          // Create notification for worker
+          await prisma.notifications.create({
+               data: {
+                    user_id: worker_id,
+                    title: "New Booking Request",
+                    body: `You have a new booking request from ${client.full_name} for ${selected_time ? new Date(selected_time).toLocaleString() : 'a scheduled time'}.`,
+                    is_read: false
+               }
+          }).catch(err => {
+               console.error('Failed to create notification:', err);
           });
 
           res.status(201).json({
@@ -326,6 +338,9 @@ const getUserOrder = async (req, res) => {
                     updated_at: true,
                     work_start: true,
                     work_end: true,
+                    is_reviewed: true,
+                    is_complained: true,
+                    complain_id: true,
                     users_orders_assigned_worker_idTousers: {
                          select: {
                               id: true,
@@ -386,6 +401,9 @@ const getWorkerHirings = async (req, res) => {
                     updated_at: true,
                     work_start: true,
                     work_end: true,
+                    is_reviewed: true,
+                    is_complained: true,
+                    complain_id: true,
                     users_orders_client_idTousers: {
                          select: {
                               id: true,
@@ -469,7 +487,7 @@ const acceptRequest = async (req, res) => {
           // Lookup worker by email
           const worker = await prisma.users.findUnique({
                where: { email: workerEmail },
-               select: { id: true }
+               select: { id: true, full_name: true }
           });
 
           if (!worker) {
@@ -500,6 +518,24 @@ const acceptRequest = async (req, res) => {
                     updated_at: new Date()
                },
           });
+
+          // Fetch client details for email
+          const client = await prisma.users.findUnique({
+               where: { id: order.client_id },
+               select: { email: true, full_name: true }
+          });
+
+          // Send acceptance email to client
+          if (client && client.email) {
+               await sendRequestAcceptedEmail({
+                    clientEmail: client.email,
+                    clientName: client.full_name,
+                    workerName: worker.full_name || 'Worker',
+                    address: order.address || 'Not specified',
+                    description: order.description || 'No description provided',
+                    selectedTime: order.selected_time
+               });
+          }
 
           // Notify client
           await prisma.notifications.create({
@@ -534,7 +570,7 @@ const cancelRequest = async (req, res) => {
           // Lookup worker by email
           const worker = await prisma.users.findUnique({
                where: { email: workerEmail },
-               select: { id: true }
+               select: { id: true, full_name: true }
           });
 
           if (!worker) {
@@ -567,6 +603,25 @@ const cancelRequest = async (req, res) => {
                     updated_at: new Date()
                }
           });
+
+          // Fetch client details for email
+          const client = await prisma.users.findUnique({
+               where: { id: order.client_id },
+               select: { email: true, full_name: true }
+          });
+
+          // Send cancellation email to client
+          if (client && client.email) {
+               await sendRequestCancelledEmail({
+                    clientEmail: client.email,
+                    clientName: client.full_name,
+                    workerName: worker.full_name || 'Worker',
+                    address: order.address || 'Not specified',
+                    description: order.description || 'No description provided',
+                    cancelReason: reason,
+                    selectedTime: order.selected_time
+               });
+          }
 
           // Notify client
           await prisma.notifications.create({
@@ -800,22 +855,95 @@ const acceptExtraItems = async (req, res) => {
 const getAwaitingWorkDetails = async (req, res) => {
      const { orderId } = req.params;
 
+     console.log(orderId);
+     
+
      try {
-          // Fetch order with total amount
+          // Fetch order with full details including reviews and ratings
           const order = await prisma.orders.findUnique({
                where: { id: orderId },
                select: {
                     id: true,
-                    total_amount: true,
+                    client_id: true,
+                    assigned_worker_id: true,
                     status: true,
+                    work_start: true,
+                    work_end: true,
+                    total_amount: true,
+                    description: true,
+                    address: true,
+                    selected_time: true,
+                    payment_completed: true,
+                    cancel_reason: true,
+                    canceled_by: true,
                     items_approval: true,
+                    created_at: true,
+                    updated_at: true,
+                    users_orders_client_idTousers: {
+                         select: {
+                              id: true,
+                              full_name: true,
+                              email: true,
+                              phone: true,
+                              profile_picture: true
+                         }
+                    },
+                    users_orders_assigned_worker_idTousers: {
+                         select: {
+                              id: true,
+                              full_name: true,
+                              email: true,
+                              phone: true,
+                              profile_picture: true,
+                              worker_profiles: {
+                                   select: {
+                                        display_name: true,
+                                        bio: true,
+                                        years_experience: true,
+                                        avg_rating: true,
+                                        total_reviews: true,
+                                        verification: true
+                                   }
+                              }
+                         }
+                    },
                     order_items: {
                          select: {
                               id: true,
                               items: true,
                               additional_notes: true,
                               verified: true,
+                              created_at: true,
+                              updated_at: true
+                         }
+                    },
+                    payments: {
+                         select: {
+                              id: true,
+                              amount: true,
+                              status: true,
+                              payment_method: true,
+                              trx_id: true,
+                              paid_at: true,
                               created_at: true
+                         },
+                         orderBy: {
+                              created_at: 'desc'
+                         }
+                    },
+                    reviews: {
+                         select: {
+                              id: true,
+                              rating: true,
+                              comment: true,
+                              created_at: true,
+                              users_reviews_user_idTousers: {
+                                   select: {
+                                        id: true,
+                                        full_name: true,
+                                        profile_picture: true
+                                   }
+                              }
                          }
                     }
                }
@@ -824,7 +952,6 @@ const getAwaitingWorkDetails = async (req, res) => {
           if (!order) {
                return res.status(404).json({ error: "Order not found" });
           }
-
 
           res.status(200).json({
                order

@@ -14,6 +14,58 @@ const SSLCOMMERZ_VALIDATION_URL = is_live
      ? 'https://securepay.sslcommerz.com/validator/api/validationserverAPI.php'
      : 'https://sandbox.sslcommerz.com/validator/api/validationserverAPI.php';
 
+const SSLCOMMERZ_REFUND_URL = is_live
+     ? 'https://securepay.sslcommerz.com/validator/api/merchantApiV4/transaction/refund'
+     : 'https://sandbox.sslcommerz.com/validator/api/merchantApiV4/transaction/refund';
+
+const SSLCOMMERZ_TRANSACTION_QUERY_URL = is_live
+     ? 'https://securepay.sslcommerz.com/validator/api/merchantApiV4/transaction/query'
+     : 'https://sandbox.sslcommerz.com/validator/api/merchantApiV4/transaction/query';
+
+/**
+ * Query SSLCommerz transaction status by transaction ID
+ * Internal method to verify transaction before refund
+ */
+const querySSLCommertzTransaction = async (transactionId) => {
+     try {
+          const queryData = {
+               store_id: store_id,
+               store_passwd: store_passwd,
+               tran_id: transactionId
+          };
+
+          console.log("SSLCommerz Transaction Query Request:", queryData);
+
+          const formData = new URLSearchParams();
+          Object.keys(queryData).forEach(key => {
+               formData.append(key, queryData[key]);
+          });
+
+          const response = await fetch(SSLCOMMERZ_TRANSACTION_QUERY_URL, {
+               method: 'POST',
+               headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+               },
+               body: formData.toString(),
+          });
+
+          const responseText = await response.text();
+          console.log("SSLCommerz Transaction Query Raw Response:", responseText);
+
+          try {
+               const queryResponse = JSON.parse(responseText);
+               console.log("SSLCommerz Transaction Query Response:", queryResponse);
+               return queryResponse;
+          } catch (parseError) {
+               console.error("SSLCommerz transaction query returned non-JSON response:", responseText);
+               return null;
+          }
+     } catch (error) {
+          console.error("SSLCommerz transaction query error:", error);
+          return null;
+     }
+};
+
 const paymentOnHand = async (req, res) => {
      const { order_id, payer_email, amount } = req.body;
 
@@ -761,9 +813,11 @@ const adminGetPaymentsSummary = async (req, res) => {
  * Refund payment / Admin action (Admin)
  */
 const adminRefundPayment = async (req, res) => {
+     console.log("hitted");
+     
      try {
           const { id } = req.params;
-          const { refundAmount, refundReason } = req.body;
+          const { refundAmount, refundReason } = req.body;       
 
           // Validate required fields
           if (!refundReason) {
@@ -780,7 +834,8 @@ const adminRefundPayment = async (req, res) => {
                     id: true,
                     amount: true,
                     status: true,
-                    order_id: true
+                    order_id: true,
+                    trx_id: true
                }
           });
 
@@ -806,6 +861,105 @@ const adminRefundPayment = async (req, res) => {
                     error: "Refund amount cannot exceed payment amount"
                });
           }
+
+          // Initialize refund status
+          let refundStatus = 'pending';
+          let refundRefId = `REF_${Date.now()}`;
+          let sslRefundResponse = null;
+          let transactionQueryResponse = null;
+
+          // Call SSLCommerz refund API if payment was made via SSLCommerz
+          if (payment.trx_id && payment.trx_id.startsWith('TRX_')) {
+               try {
+                    // Query transaction status first to verify transaction
+                    console.log("Querying SSLCommerz transaction status for:", payment.trx_id);
+                    transactionQueryResponse = await querySSLCommertzTransaction(payment.trx_id);
+
+                    if (!transactionQueryResponse || transactionQueryResponse.length === 0) {
+                         console.warn("Transaction not found in SSLCommerz");
+                         // If transaction not found, still proceed with local refund record
+                         refundStatus = 'processing';
+                    } else {
+                         const transactionData = Array.isArray(transactionQueryResponse) 
+                              ? transactionQueryResponse[0] 
+                              : transactionQueryResponse;
+
+                         console.log("Transaction Query Data:", transactionData);
+
+                         // Check if transaction status is valid (VALID or VALIDATED)
+                         if (transactionData.status === 'VALID' || transactionData.status === 'VALIDATED') {
+                              // Proceed with refund
+                              const refundData = {
+                                   store_id: store_id,
+                                   store_passwd: store_passwd,
+                                   refund_amount: refundAmountDecimal,
+                                   bank_tran_id: payment.trx_id,
+                                   refund_remarks: refundReason
+                              };
+
+                              console.log("SSLCommerz Refund Request:", refundData);
+
+                              const formData = new URLSearchParams();
+                              Object.keys(refundData).forEach(key => {
+                                   formData.append(key, refundData[key]);
+                              });
+
+                              const response = await fetch(SSLCOMMERZ_REFUND_URL, {
+                                   method: 'POST',
+                                   headers: {
+                                        'Content-Type': 'application/x-www-form-urlencoded',
+                                   },
+                                   body: formData.toString(),
+                              });
+
+                              const responseText = await response.text();
+                              console.log("SSLCommerz Refund Raw Response:", responseText);
+
+                              try {
+                                   sslRefundResponse = JSON.parse(responseText);
+                              } catch (parseError) {
+                                   console.error("SSLCommerz refund returned non-JSON response:", responseText);
+                              }
+
+                              // Check if refund was successful
+                              if (sslRefundResponse?.refund_status === 'Initiated' || sslRefundResponse?.refund_status === 'Completed') {
+                                   refundStatus = 'success';
+                                   refundRefId = sslRefundResponse?.refund_ref_id || refundRefId;
+                              } else if (sslRefundResponse?.refund_status === 'Pending') {
+                                   refundStatus = 'processing';
+                              } else {
+                                   refundStatus = 'failed';
+                              }
+
+                              console.log("SSLCommerz Refund Response:", sslRefundResponse);
+                         } else {
+                              console.warn("Transaction status is not VALID:", transactionData.status);
+                              return res.status(400).json({
+                                   success: false,
+                                   error: "Transaction is not in valid state for refund",
+                                   transactionStatus: transactionData.status
+                              });
+                         }
+                    }
+               } catch (sslError) {
+                    console.error("SSLCommerz refund API error:", sslError);
+                    // If SSLCommerz API fails, mark as processing (manual follow-up needed)
+                    refundStatus = 'processing';
+               }
+          }
+
+          // create refund record
+          const refund = await prisma.refunds.create({
+               data: {
+                    payment_id: payment.id,
+                    trx_id: payment.trx_id || `REF_TRX_${payment.id}_${Date.now()}`,
+                    refund_amount: refundAmountDecimal,
+                    refund_reason: refundReason,
+                    refund_ref_id: refundRefId,
+                    refund_status: refundStatus,
+                    completed_at: refundStatus === 'success' ? new Date() : null
+               }
+          });
 
           // Update payment status to refunded
           const updatedPayment = await prisma.payments.update({
@@ -838,13 +992,289 @@ const adminRefundPayment = async (req, res) => {
                message: `Payment refunded successfully. Refund amount: ${refundAmountDecimal}`,
                data: {
                     payment_id: updatedPayment.id,
+                    refund_id: refund.id,
                     refund_amount: refundAmountDecimal,
-                    reason: refundReason,
-                    payment_status: updatedPayment.status
+                    refund_ref: refund.refund_ref_id,
+                    refund_status: refund.refund_status,
+                    reason: refund.refund_reason,
+                    payment_status: updatedPayment.status,
+                    ssl_response: sslRefundResponse || null
                }
           });
      } catch (error) {
           console.error("Error refunding payment:", error);
+          res.status(500).json({
+               success: false,
+               error: "Internal Server Error",
+               message: error.message
+          });
+     }
+};
+
+/**
+ * Get refund status by refund ID
+ */
+const getRefundStatus = async (req, res) => {
+     try {
+          const { refundId } = req.params;
+
+          const refund = await prisma.refunds.findUnique({
+               where: { id: refundId },
+               select: {
+                    id: true,
+                    refund_ref_id: true,
+                    refund_amount: true,
+                    refund_reason: true,
+                    refund_status: true,
+                    trx_id: true,
+                    created_at: true,
+                    updated_at: true,
+                    completed_at: true,
+                    payments: {
+                         select: {
+                              id: true,
+                              order_id: true,
+                              amount: true,
+                              status: true,
+                              trx_id: true
+                         }
+                    }
+               }
+          });
+
+          if (!refund) {
+               return res.status(404).json({
+                    success: false,
+                    error: "Refund not found"
+               });
+          }
+
+          res.status(200).json({
+               success: true,
+               data: refund
+          });
+     } catch (error) {
+          console.error("Error fetching refund status:", error);
+          res.status(500).json({
+               success: false,
+               error: "Internal Server Error",
+               message: error.message
+          });
+     }
+};
+
+/**
+ * Query and update refund status from SSLCommerz
+ */
+const queryRefundStatus = async (req, res) => {
+     try {
+          const { refundId } = req.params;
+
+          // Get refund details
+          const refund = await prisma.refunds.findUnique({
+               where: { id: refundId },
+               select: {
+                    id: true,
+                    refund_ref_id: true,
+                    refund_status: true,
+                    trx_id: true,
+                    payment_id: true
+               }
+          });
+
+          if (!refund) {
+               return res.status(404).json({
+                    success: false,
+                    error: "Refund not found"
+               });
+          }
+
+          // If refund already succeeded, no need to query
+          if (refund.refund_status === 'success') {
+               return res.status(200).json({
+                    success: true,
+                    message: "Refund already completed",
+                    data: {
+                         refund_id: refund.id,
+                         refund_status: refund.refund_status,
+                         refund_ref_id: refund.refund_ref_id
+                    }
+               });
+          }
+
+          // Query transaction from SSLCommerz to get refund status
+          console.log("Querying SSLCommerz for refund status using refund_ref_id:", refund.refund_ref_id);
+          
+          const queryData = {
+               store_id: store_id,
+               store_passwd: store_passwd,
+               refund_ref_id: refund.refund_ref_id || refund.trx_id
+          };
+
+          const formData = new URLSearchParams();
+          Object.keys(queryData).forEach(key => {
+               formData.append(key, queryData[key]);
+          });
+
+          const response = await fetch(SSLCOMMERZ_TRANSACTION_QUERY_URL, {
+               method: 'POST',
+               headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+               },
+               body: formData.toString(),
+          });
+
+          const responseText = await response.text();
+          console.log("SSLCommerz Refund Status Query Raw Response:", responseText);
+
+          let queryResponse = null;
+          try {
+               queryResponse = JSON.parse(responseText);
+          } catch (parseError) {
+               console.error("SSLCommerz response parsing failed:", responseText);
+               return res.status(400).json({
+                    success: false,
+                    error: "Failed to parse SSLCommerz response"
+               });
+          }
+
+          console.log("SSLCommerz Refund Status Query Response:", queryResponse);
+
+          // Extract refund status from response
+          let newRefundStatus = refund.refund_status;
+          
+          if (Array.isArray(queryResponse)) {
+               const refundData = queryResponse[0];
+               if (refundData?.refund_status === 'Completed' || refundData?.refund_status === 'Success') {
+                    newRefundStatus = 'success';
+               } else if (refundData?.refund_status === 'Initiated' || refundData?.refund_status === 'Pending') {
+                    newRefundStatus = 'processing';
+               } else if (refundData?.refund_status === 'Failed' || refundData?.refund_status === 'Rejected') {
+                    newRefundStatus = 'failed';
+               }
+          } else if (queryResponse?.refund_status) {
+               if (queryResponse.refund_status === 'Completed' || queryResponse.refund_status === 'Success') {
+                    newRefundStatus = 'success';
+               } else if (queryResponse.refund_status === 'Initiated' || queryResponse.refund_status === 'Pending') {
+                    newRefundStatus = 'processing';
+               } else if (queryResponse.refund_status === 'Failed' || queryResponse.refund_status === 'Rejected') {
+                    newRefundStatus = 'failed';
+               }
+          }
+
+          // Update refund status in database if changed
+          if (newRefundStatus !== refund.refund_status) {
+               await prisma.refunds.update({
+                    where: { id: refundId },
+                    data: {
+                         refund_status: newRefundStatus,
+                         updated_at: new Date(),
+                         completed_at: newRefundStatus === 'success' ? new Date() : null
+                    }
+               });
+
+               console.log(`Refund status updated from ${refund.refund_status} to ${newRefundStatus}`);
+          }
+
+          res.status(200).json({
+               success: true,
+               message: "Refund status queried successfully",
+               data: {
+                    refund_id: refund.id,
+                    refund_status: newRefundStatus,
+                    refund_ref_id: refund.refund_ref_id,
+                    ssl_response: queryResponse
+               }
+          });
+     } catch (error) {
+          console.error("Error querying refund status:", error);
+          res.status(500).json({
+               success: false,
+               error: "Internal Server Error",
+               message: error.message
+          });
+     }
+};
+
+/**
+ * Get all refunds (Admin)
+ */
+const adminGetAllRefunds = async (req, res) => {
+     try {
+          const {
+               page = 1,
+               limit = 10,
+               refundStatus,
+               dateFrom,
+               dateTo,
+               sortBy = 'created_at',
+               sortOrder = 'desc'
+          } = req.query;
+
+          const skip = (parseInt(page) - 1) * parseInt(limit);
+          const take = parseInt(limit);
+
+          // Build where clause
+          const where = {};
+
+          if (refundStatus) {
+               where.refund_status = refundStatus;
+          }
+
+          if (dateFrom || dateTo) {
+               where.created_at = {};
+               if (dateFrom) {
+                    where.created_at.gte = new Date(dateFrom);
+               }
+               if (dateTo) {
+                    where.created_at.lte = new Date(dateTo);
+               }
+          }
+
+          // Get total count
+          const totalCount = await prisma.refunds.count({ where });
+
+          // Fetch refunds
+          const refunds = await prisma.refunds.findMany({
+               where,
+               skip,
+               take,
+               select: {
+                    id: true,
+                    refund_ref_id: true,
+                    refund_amount: true,
+                    refund_reason: true,
+                    refund_status: true,
+                    trx_id: true,
+                    created_at: true,
+                    updated_at: true,
+                    completed_at: true,
+                    payments: {
+                         select: {
+                              id: true,
+                              order_id: true,
+                              amount: true,
+                              status: true
+                         }
+                    }
+               },
+               orderBy: {
+                    [sortBy]: sortOrder
+               }
+          });
+
+          res.status(200).json({
+               success: true,
+               data: refunds,
+               pagination: {
+                    page: parseInt(page),
+                    limit: parseInt(limit),
+                    totalCount,
+                    totalPages: Math.ceil(totalCount / parseInt(limit))
+               }
+          });
+     } catch (error) {
+          console.error("Error fetching refunds:", error);
           res.status(500).json({
                success: false,
                error: "Internal Server Error",
@@ -865,5 +1295,9 @@ module.exports = {
      adminGetAllPayments,
      adminGetPaymentDetails,
      adminGetPaymentsSummary,
-     adminRefundPayment
+     adminRefundPayment,
+     // Refund status functions
+     getRefundStatus,
+     queryRefundStatus,
+     adminGetAllRefunds
 };

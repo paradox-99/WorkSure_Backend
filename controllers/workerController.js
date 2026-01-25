@@ -147,39 +147,96 @@ const searchWorkers = async (req, res) => {
   const { categorySlug, lat, lon, radiusMeters } = req.query
 
   try {
-    const workers = await prisma.$queryRaw`
-          WITH cat AS (
-            SELECT id FROM service_sections WHERE slug = ${categorySlug}
-          )
-          SELECT
-            u.id AS user_id,
-            u.profile_picture,
-            wp.display_name,
-            wp.avg_rating,
-            a.lat,
-            a.lon,
-            ws.base_price,
-            ST_Distance(
-              ST_SetSRID(ST_MakePoint(a.lon, a.lat), 4326)::geography,
-              ST_SetSRID(ST_MakePoint(${lon}, ${lat}), 4326)::geography
-            ) AS distance_m
-          FROM worker_services ws
-          JOIN users u ON ws.user_id = u.id
-          JOIN worker_profiles wp ON wp.user_id = u.id
-          LEFT JOIN addresses a ON a.user_id = u.id
-          WHERE ws.section_id = (SELECT id FROM cat)
-            AND wp.verification = 'verified'
-            AND a.lat IS NOT NULL
-            AND a.lon IS NOT NULL
-            AND ST_DWithin(
-              ST_SetSRID(ST_MakePoint(a.lon, a.lat), 4326)::geography,
-              ST_SetSRID(ST_MakePoint(${lon}, ${lat}), 4326)::geography,
-              ${radiusMeters}
-            )`;
-    res.status(200).json(workers)
+    // Validate required parameters
+    if (!lat || !lon) {
+      return res.status(400).json({ error: 'Latitude and longitude are required' });
+    }
+
+    const radius = radiusMeters || 10000; // Default 10km radius
+
+    // First, find all workers within the given radius with their services
+    const workersInRadius = await prisma.$queryRaw`
+      SELECT DISTINCT
+        u.id AS user_id,
+        u.full_name,
+        u.profile_picture,
+        wp.display_name,
+        wp.avg_rating,
+        wp.total_reviews,
+        a.lat,
+        a.lon,
+        a.city,
+        a.district,
+        ST_Distance(
+          ST_SetSRID(ST_MakePoint(a.lon, a.lat), 4326)::geography,
+          ST_SetSRID(ST_MakePoint(${parseFloat(lon)}, ${parseFloat(lat)}), 4326)::geography
+        ) AS distance_m
+      FROM users u
+      JOIN worker_profiles wp ON wp.user_id = u.id
+      LEFT JOIN addresses a ON a.user_id = u.id
+      WHERE u.role = 'worker'
+        AND wp.verification = 'verified'
+        AND u.status = 'active'
+        AND a.lat IS NOT NULL
+        AND a.lon IS NOT NULL
+        AND ST_DWithin(
+          ST_SetSRID(ST_MakePoint(a.lon, a.lat), 4326)::geography,
+          ST_SetSRID(ST_MakePoint(${parseFloat(lon)}, ${parseFloat(lat)}), 4326)::geography,
+          ${parseFloat(radius)}
+        )
+      ORDER BY distance_m ASC`;
+
+    let workers = workersInRadius;
+
+    // If categorySlug is provided, filter workers by service_sections slug
+    if (categorySlug) {
+      // Get the section ID for the given slug
+      const section = await prisma.service_sections.findFirst({
+        where: { slug: categorySlug },
+        select: { id: true }
+      });
+
+      if (!section) {
+        return res.status(404).json({
+          error: 'Service category not found',
+          categorySlug
+        });
+      }
+
+      // Get worker IDs that offer this service
+      const workerServices = await prisma.worker_services.findMany({
+        where: { section_id: section.id },
+        select: {
+          user_id: true,
+          base_price: true,
+          price_unit: true
+        }
+      });
+
+      const workerServiceMap = new Map(
+        workerServices.map(ws => [ws.user_id, { base_price: ws.base_price, price_unit: ws.price_unit }])
+      );
+
+      // Filter workers who offer this service and add pricing info
+      workers = workersInRadius
+        .filter(worker => workerServiceMap.has(worker.user_id))
+        .map(worker => ({
+          ...worker,
+          base_price: workerServiceMap.get(worker.user_id).base_price,
+          price_unit: workerServiceMap.get(worker.user_id).price_unit
+        }));
+    }
+
+    res.status(200).json({
+      success: true,
+      count: workers.length,
+      categorySlug: categorySlug || null,
+      radiusMeters: parseFloat(radius),
+      workers
+    });
   } catch (error) {
     console.error('Error searching workers:', error)
-    res.status(500).json({ error: 'Internal Server Error' })
+    res.status(500).json({ error: 'Internal Server Error', message: error.message })
   }
 }
 
@@ -374,7 +431,7 @@ const getWorkerDetails = async (req, res) => {
             id: true,
             rating: true,
             comment: true,
-            users_reviews_reviewer_idTousers: {
+            users_reviews_user_idTousers: {
               select: {
                 id: true,
                 full_name: true,
@@ -401,199 +458,6 @@ const getWorkerDetails = async (req, res) => {
     res.status(500).json({ error: 'Internal Server Error' });
   }
 };
-
-const cancelWorkRequest = async (req, res) => {
-  const { orderId } = req.params;
-  const { workerId } = req.body;
-  const cancelReason = req.body.reason || '';
-
-  try {
-    // Validate input
-    if (!orderId || !workerId) {
-      return res.status(400).json({ error: 'Order ID and Worker ID are required' });
-    }
-
-    // Find the order
-    const order = await prisma.orders.findUnique({
-      where: { id: orderId }
-    });
-
-    if (!order) {
-      return res.status(404).json({ error: 'Order not found' });
-    }
-
-    // Check if worker is assigned to this order
-    if (order.assigned_worker_id !== workerId) {
-      return res.status(403).json({ error: 'Worker is not assigned to this order' });
-    }
-
-    // Check if order status allows cancellation
-    const cancellableStatuses = ['pending', 'accepted', 'in_progress'];
-    if (!cancellableStatuses.includes(order.status)) {
-      return res.status(400).json({
-        error: `Order with status '${order.status}' cannot be cancelled`
-      });
-    }
-
-    // Update order status to cancelled
-    const updatedOrder = await prisma.orders.update({
-      where: { id: orderId },
-      data: {
-        status: 'cancelled',
-        updated_at: new Date()
-      }
-    });
-
-    // Get worker details for email
-    const worker = await prisma.users.findUnique({
-      where: { id: workerId },
-      select: { full_name: true }
-    });
-
-    // Get order address
-    const orderAddress = await prisma.addresses.findUnique({
-      where: { id: order.address_id }
-    });
-    const addressString = orderAddress ?
-      `${orderAddress.street || ''}, ${orderAddress.city || ''}, ${orderAddress.district || ''}`.replace(/^, |, $/g, '') :
-      'Not specified';
-
-    // Create a notification for the client
-    const client = await prisma.users.findUnique({
-      where: { id: order.client_id }
-    });
-
-    if (client) {
-      await prisma.notifications.create({
-        data: {
-          user_id: order.client_id,
-          title: 'Work Request Cancelled',
-          body: `The worker has cancelled the work request. Reason: ${cancelReason || 'No reason provided'}`,
-          is_read: false
-        }
-      });
-
-      // Send cancellation email to client
-      if (client.email) {
-        await sendRequestCancelledEmail({
-          clientEmail: client.email,
-          clientName: client.full_name,
-          workerName: worker?.full_name || 'Worker',
-          address: addressString,
-          description: order.description,
-          cancelReason: cancelReason,
-          selectedTime: order.scheduled_at
-        });
-      }
-    }
-
-    res.status(200).json({
-      message: 'Work request cancelled successfully',
-      order: updatedOrder
-    });
-
-  } catch (error) {
-    console.error('Error cancelling work request:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
-  }
-}
-
-const acceptWorkRequest = async (req, res) => {
-  const { orderId } = req.params;
-  const { workerId } = req.body;
-
-  try {
-    // Validate input
-    if (!orderId || !workerId) {
-      return res.status(400).json({ error: 'Order ID and Worker ID are required' });
-    }
-
-    // Find the order
-    const order = await prisma.orders.findUnique({
-      where: { id: orderId }
-    });
-
-    if (!order) {
-      return res.status(404).json({ error: 'Order not found' });
-    }
-
-    // Check if order status is pending
-    if (order.status !== 'pending') {
-      return res.status(400).json({
-        error: `Order with status '${order.status}' cannot be accepted`
-      });
-    }
-
-    // Check if worker is already assigned
-    if (order.assigned_worker_id && order.assigned_worker_id !== workerId) {
-      return res.status(403).json({ error: 'This order is already assigned to another worker' });
-    }
-
-    // Update order - assign worker and change status to accepted
-    const updatedOrder = await prisma.orders.update({
-      where: { id: orderId },
-      data: {
-        assigned_worker_id: workerId,
-        status: 'accepted',
-        updated_at: new Date()
-      },
-      include: {
-        users_orders_client_idTousers: {
-          select: {
-            id: true,
-            full_name: true,
-            email: true
-          }
-        },
-        addresses: true
-      }
-    });
-
-    // Get worker details for email
-    const worker = await prisma.users.findUnique({
-      where: { id: workerId },
-      select: { full_name: true }
-    });
-
-    // Get address string from included address
-    const orderAddress = updatedOrder.addresses;
-    const addressString = orderAddress ?
-      `${orderAddress.street || ''}, ${orderAddress.city || ''}, ${orderAddress.district || ''}`.replace(/^, |, $/g, '') :
-      'Not specified';
-
-    // Create a notification for the client
-    await prisma.notifications.create({
-      data: {
-        user_id: order.client_id,
-        title: 'Work Request Accepted',
-        body: 'A worker has accepted your work request and will be arriving soon.',
-        is_read: false
-      }
-    });
-
-    // Send acceptance email to client
-    const clientData = updatedOrder.users_orders_client_idTousers;
-    if (clientData && clientData.email) {
-      await sendRequestAcceptedEmail({
-        clientEmail: clientData.email,
-        clientName: clientData.full_name,
-        workerName: worker?.full_name || 'Worker',
-        address: addressString,
-        description: order.description,
-        selectedTime: order.scheduled_at
-      });
-    }
-
-    res.status(200).json({
-      message: 'Work request accepted successfully',
-      order: updatedOrder
-    });
-
-  } catch (error) {
-    console.error('Error accepting work request:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
-  }
-}
 
 /**
  * Get Worker Dashboard Summary Cards Only
@@ -710,8 +574,8 @@ const getWorkerDetailsByEmail = async (req, res) => {
       return res.status(400).json({ error: 'Email is required' });
     }
 
-    // Fetch worker details with all related information
-    const workerDetails = await prisma.users.findUnique({
+    // Fetch basic worker details first (faster query)
+    const worker = await prisma.users.findUnique({
       where: { email: email },
       select: {
         id: true,
@@ -725,7 +589,6 @@ const getWorkerDetailsByEmail = async (req, res) => {
         created_at: true,
         last_login_at: true,
         status: true,
-        // Worker profile
         worker_profiles: {
           select: {
             display_name: true,
@@ -738,9 +601,25 @@ const getWorkerDetailsByEmail = async (req, res) => {
             created_at: true,
             updated_at: true
           }
-        },
+        }
+      }
+    });
+
+    if (!worker) {
+      return res.status(404).json({ error: 'Worker not found' });
+    }
+
+    // Check if user is actually a worker
+    if (worker.role !== 'worker') {
+      return res.status(403).json({ error: 'User is not a worker' });
+    }
+
+    // Fetch additional data in a single transaction (uses one connection)
+    const [workerServices, availabilities, addresses, reviews] = await prisma.$transaction(async (tx) => {
+      return Promise.all([
         // Services offered by worker
-        worker_services: {
+        tx.worker_services.findMany({
+          where: { user_id: worker.id },
           select: {
             id: true,
             base_price: true,
@@ -764,18 +643,20 @@ const getWorkerDetailsByEmail = async (req, res) => {
               }
             }
           }
-        },
+        }),
         // Availability
-        availabilities: {
+        tx.availabilities.findMany({
+          where: { user_id: worker.id },
           select: {
             id: true,
             available_from: true,
             available_to: true,
             weekend: true
           }
-        },
+        }),
         // Addresses
-        addresses: {
+        tx.addresses.findMany({
+          where: { user_id: worker.id },
           select: {
             id: true,
             street: true,
@@ -785,38 +666,18 @@ const getWorkerDetailsByEmail = async (req, res) => {
             lat: true,
             lon: true
           }
-        },
-        // Reviews received by worker
-        reviews_reviews_worker_idTousers: {
-          select: {
-            id: true,
-            rating: true,
-            comment: true,
-            created_at: true,
-            users_reviews_reviewer_idTousers: {
-              select: {
-                id: true,
-                full_name: true,
-                profile_picture: true
-              }
-            }
-          },
-          orderBy: {
-            created_at: 'desc'
-          },
-          take: 10
-        }
-      }
+        })
+      ]);
     });
 
-    if (!workerDetails) {
-      return res.status(404).json({ error: 'Worker not found' });
-    }
-
-    // Check if user is actually a worker
-    if (workerDetails.role !== 'worker') {
-      return res.status(403).json({ error: 'User is not a worker' });
-    }
+    // Combine all data
+    const workerDetails = {
+      ...worker,
+      worker_services: workerServices,
+      availabilities: availabilities,
+      addresses: addresses,
+      reviews_reviews_worker_idTousers: reviews
+    };
 
     res.status(200).json({
       success: true,
@@ -1078,4 +939,255 @@ const activateWorker = async (req, res) => {
   }
 };
 
-module.exports = { getWorkers, searchWorkers, createWorker, createWorkerService, createWorkerAvailability, updateWorkerProfile, updateWorkerService, updateAvailability, getWorkerDetails, cancelWorkRequest, acceptWorkRequest, getWorkerDashboardSummary, getWorkerDashboardTasks, getWorkerDetailsByEmail, getWorkerById, verifyWorker, suspendWorker, rejectWorker, activateWorker };
+/**
+ * Get Worker Notifications
+ * Returns all notifications for a worker
+ * @route GET /api/workerRoutes/notifications/:email
+ */
+const getWorkerNotifications = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({ error: 'ID is required' });
+    }
+
+    // Fetch worker by email
+    const worker = await prisma.users.findUnique({
+      where: { id: id },
+      select: { id: true, role: true }
+    });
+
+    if (!worker) {
+      return res.status(404).json({ error: 'Worker not found' });
+    }
+
+    if (worker.role !== 'worker') {
+      return res.status(403).json({
+        error: 'Access denied. This endpoint is only accessible to workers.'
+      });
+    }
+
+    // Fetch notifications for the worker
+    const notifications = await prisma.notifications.findMany({
+      where: {
+        user_id: worker.id
+      },
+      orderBy: {
+        created_at: 'desc'
+      }
+    });
+
+    // Count unread notifications
+    const unreadCount = notifications.filter(n => !n.is_read).length;
+
+    res.status(200).json({
+      success: true,
+      total: notifications.length,
+      unread: unreadCount,
+      data: notifications
+    });
+  } catch (error) {
+    console.error('Error fetching worker notifications:', error);
+    res.status(500).json({
+      error: 'Failed to fetch notifications',
+      message: error.message
+    });
+  }
+};
+
+/**
+ * Mark Notification as Read
+ * @route PATCH /api/workerRoutes/notifications/:id/read
+ */
+const markNotificationAsRead = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const notification = await prisma.notifications.update({
+      where: { id },
+      data: { is_read: true }
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Notification marked as read',
+      data: notification
+    });
+  } catch (error) {
+    console.error('Error updating notification:', error);
+    res.status(500).json({
+      error: 'Failed to update notification',
+      message: error.message
+    });
+  }
+};
+
+/**
+ * Mark All Notifications as Read
+ * @route PATCH /api/workerRoutes/notifications/read-all/:id
+ */
+const markAllNotificationsAsRead = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({ error: 'Id is required' });
+    }
+
+    // Fetch worker by email
+    const worker = await prisma.users.findUnique({
+      where: { id: id },
+      select: { role: true }
+    });
+
+    if (!worker) {
+      return res.status(404).json({ error: 'Worker not found' });
+    }
+
+    if (worker.role !== 'worker') {
+      return res.status(403).json({
+        error: 'Access denied. This endpoint is only accessible to workers.'
+      });
+    }
+
+    // Update all unread notifications
+    const result = await prisma.notifications.updateMany({
+      where: {
+        user_id: worker.id,
+        is_read: false
+      },
+      data: {
+        is_read: true
+      }
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'All notifications marked as read',
+      updated_count: result.count
+    });
+  } catch (error) {
+    console.error('Error updating notifications:', error);
+    res.status(500).json({
+      error: 'Failed to update notifications',
+      message: error.message
+    });
+  }
+};
+
+/**
+ * Get all reviews for a worker by worker ID
+ * @route GET /api/workerRoutes/reviews/:workerId
+ */
+const getWorkerReviews = async (req, res) => {
+  const { workerId } = req.params;
+  const { page = 1, limit = 10, sortBy = 'created_at', order = 'desc' } = req.query;
+
+  try {
+    if (!workerId) {
+      return res.status(400).json({ error: 'Worker ID is required' });
+    }
+
+    // Validate worker exists
+    const worker = await prisma.users.findUnique({
+      where: { id: workerId },
+      select: { 
+        id: true, 
+        role: true,
+        worker_profiles: {
+          select: {
+            avg_rating: true,
+            total_reviews: true
+          }
+        }
+      }
+    });
+
+    if (!worker) {
+      return res.status(404).json({ error: 'Worker not found' });
+    }
+
+    if (worker.role !== 'worker') {
+      return res.status(403).json({ error: 'User is not a worker' });
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // Get reviews with pagination
+    const [reviews, totalCount] = await prisma.$transaction(async (tx) => {
+      return Promise.all([
+        tx.reviews.findMany({
+          where: { worker_id: workerId },
+          select: {
+            id: true,
+            rating: true,
+            comment: true,
+            created_at: true,
+            order_id: true,
+            users_reviews_user_idTousers: {
+              select: {
+                id: true,
+                full_name: true,
+                profile_picture: true
+              }
+            },
+            orders: {
+              select: {
+                id: true,
+                description: true
+              }
+            }
+          },
+          orderBy: {
+            [sortBy]: order.toLowerCase()
+          },
+          skip: skip,
+          take: parseInt(limit)
+        }),
+        tx.reviews.count({
+          where: { worker_id: workerId }
+        })
+      ]);
+    });
+
+    // Transform the data
+    const transformedReviews = reviews.map(review => ({
+      id: review.id,
+      rating: review.rating,
+      comment: review.comment,
+      created_at: review.created_at,
+      order_id: review.order_id,
+      service_description: review.orders?.description || null,
+      reviewer: {
+        id: review.users_reviews_user_idTousers?.id || null,
+        name: review.users_reviews_user_idTousers?.full_name || 'Anonymous',
+        profile_picture: review.users_reviews_user_idTousers?.profile_picture || null
+      }
+    }));
+
+    res.status(200).json({
+      success: true,
+      data: {
+        worker_id: workerId,
+        avg_rating: worker.worker_profiles?.avg_rating || 0,
+        total_reviews: totalCount,
+        reviews: transformedReviews,
+        pagination: {
+          current_page: parseInt(page),
+          total_pages: Math.ceil(totalCount / parseInt(limit)),
+          per_page: parseInt(limit),
+          total_count: totalCount
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching worker reviews:', error);
+    res.status(500).json({ 
+      error: 'Internal Server Error',
+      message: error.message 
+    });
+  }
+};
+
+module.exports = { getWorkers, searchWorkers, createWorker, createWorkerService, createWorkerAvailability, updateWorkerProfile, updateWorkerService, updateAvailability, getWorkerDetails, getWorkerDashboardSummary, getWorkerDashboardTasks, getWorkerDetailsByEmail, getWorkerById, verifyWorker, suspendWorker, rejectWorker, activateWorker, getWorkerNotifications, markNotificationAsRead, markAllNotificationsAsRead, getWorkerReviews }; 
