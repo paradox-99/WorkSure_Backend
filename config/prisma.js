@@ -11,8 +11,8 @@ if (!globalForPrisma.prisma) {
   const pool = new Pool({ 
     connectionString: process.env.URL,
     max: 10,              // Maximum number of connections in the pool
-    idleTimeoutMillis: 30000,  // Close idle connections after 30 seconds
-    connectionTimeoutMillis: 10000,  // Return an error after 2 seconds if connection could not be established
+    idleTimeoutMillis: 60000,  // Close idle connections after 60 seconds
+    connectionTimeoutMillis: 30000,  // Return an error after 30 seconds if connection could not be established
   });
 
   // 2. Create the Prisma Adapter
