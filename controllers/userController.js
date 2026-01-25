@@ -1149,5 +1149,124 @@ const markAllNotificationsAsRead = async (req, res) => {
   }
 };
 
+/**
+ * Get all reviews written by a user
+ * @route GET /api/userRoutes/reviews/:userId
+ */
+const getUserReviews = async (req, res) => {
+  const { userId } = req.params;
+  const { page = 1, limit = 10, sortBy = 'created_at', order = 'desc' } = req.query;
 
-module.exports = { getUsers, createUser, updateAddress, updateUser, getUserData, getUserById, suspendUser, activateUser, getUserByEmail, createworker, checkWorkerAvailability, createReview, createComplaint, getComplaintDetails, getUserNotifications, markNotificationAsRead, markAllNotificationsAsRead };
+  try {
+    if (!userId) {
+      return res.status(400).json({ error: 'User ID is required' });
+    }
+
+    // Validate user exists
+    const user = await prisma.users.findUnique({
+      where: { id: userId },
+      select: { 
+        id: true, 
+        role: true,
+        full_name: true
+      }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // Get reviews with pagination using transaction
+    const [reviews, totalCount] = await prisma.$transaction(async (tx) => {
+      return Promise.all([
+        tx.reviews.findMany({
+          where: { user_id: userId },
+          select: {
+            id: true,
+            rating: true,
+            comment: true,
+            created_at: true,
+            order_id: true,
+            users_reviews_worker_idTousers: {
+              select: {
+                id: true,
+                full_name: true,
+                profile_picture: true,
+                worker_profiles: {
+                  select: {
+                    display_name: true,
+                    avg_rating: true
+                  }
+                }
+              }
+            },
+            orders: {
+              select: {
+                id: true,
+                description: true,
+                status: true,
+                selected_time: true
+              }
+            }
+          },
+          orderBy: {
+            [sortBy]: order.toLowerCase()
+          },
+          skip: skip,
+          take: parseInt(limit)
+        }),
+        tx.reviews.count({
+          where: { user_id: userId }
+        })
+      ]);
+    });
+
+    // Transform the data
+    const transformedReviews = reviews.map(review => ({
+      id: review.id,
+      rating: review.rating,
+      comment: review.comment,
+      created_at: review.created_at,
+      order_id: review.order_id,
+      order_details: {
+        description: review.orders?.description || null,
+        status: review.orders?.status || null,
+        service_date: review.orders?.selected_time || null
+      },
+      worker: {
+        id: review.users_reviews_worker_idTousers?.id || null,
+        name: review.users_reviews_worker_idTousers?.full_name || 'Unknown',
+        display_name: review.users_reviews_worker_idTousers?.worker_profiles?.display_name || null,
+        profile_picture: review.users_reviews_worker_idTousers?.profile_picture || null,
+        avg_rating: review.users_reviews_worker_idTousers?.worker_profiles?.avg_rating || 0
+      }
+    }));
+
+    res.status(200).json({
+      success: true,
+      data: {
+        user_id: userId,
+        user_name: user.full_name,
+        total_reviews: totalCount,
+        reviews: transformedReviews,
+        pagination: {
+          current_page: parseInt(page),
+          total_pages: Math.ceil(totalCount / parseInt(limit)),
+          per_page: parseInt(limit),
+          total_count: totalCount
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching user reviews:', error);
+    res.status(500).json({ 
+      error: 'Internal Server Error',
+      message: error.message 
+    });
+  }
+};
+
+
+module.exports = { getUsers, createUser, updateAddress, updateUser, getUserData, getUserById, suspendUser, activateUser, getUserByEmail, createworker, checkWorkerAvailability, createReview, createComplaint, getComplaintDetails, getUserNotifications, markNotificationAsRead, markAllNotificationsAsRead, getUserReviews };

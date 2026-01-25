@@ -1097,4 +1097,118 @@ const markAllNotificationsAsRead = async (req, res) => {
   }
 };
 
-module.exports = { getWorkers, searchWorkers, createWorker, createWorkerService, createWorkerAvailability, updateWorkerProfile, updateWorkerService, updateAvailability, getWorkerDetails, getWorkerDashboardSummary, getWorkerDashboardTasks, getWorkerDetailsByEmail, getWorkerById, verifyWorker, suspendWorker, rejectWorker, activateWorker, getWorkerNotifications, markNotificationAsRead, markAllNotificationsAsRead }; 
+/**
+ * Get all reviews for a worker by worker ID
+ * @route GET /api/workerRoutes/reviews/:workerId
+ */
+const getWorkerReviews = async (req, res) => {
+  const { workerId } = req.params;
+  const { page = 1, limit = 10, sortBy = 'created_at', order = 'desc' } = req.query;
+
+  try {
+    if (!workerId) {
+      return res.status(400).json({ error: 'Worker ID is required' });
+    }
+
+    // Validate worker exists
+    const worker = await prisma.users.findUnique({
+      where: { id: workerId },
+      select: { 
+        id: true, 
+        role: true,
+        worker_profiles: {
+          select: {
+            avg_rating: true,
+            total_reviews: true
+          }
+        }
+      }
+    });
+
+    if (!worker) {
+      return res.status(404).json({ error: 'Worker not found' });
+    }
+
+    if (worker.role !== 'worker') {
+      return res.status(403).json({ error: 'User is not a worker' });
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // Get reviews with pagination
+    const [reviews, totalCount] = await prisma.$transaction(async (tx) => {
+      return Promise.all([
+        tx.reviews.findMany({
+          where: { worker_id: workerId },
+          select: {
+            id: true,
+            rating: true,
+            comment: true,
+            created_at: true,
+            order_id: true,
+            users_reviews_user_idTousers: {
+              select: {
+                id: true,
+                full_name: true,
+                profile_picture: true
+              }
+            },
+            orders: {
+              select: {
+                id: true,
+                description: true
+              }
+            }
+          },
+          orderBy: {
+            [sortBy]: order.toLowerCase()
+          },
+          skip: skip,
+          take: parseInt(limit)
+        }),
+        tx.reviews.count({
+          where: { worker_id: workerId }
+        })
+      ]);
+    });
+
+    // Transform the data
+    const transformedReviews = reviews.map(review => ({
+      id: review.id,
+      rating: review.rating,
+      comment: review.comment,
+      created_at: review.created_at,
+      order_id: review.order_id,
+      service_description: review.orders?.description || null,
+      reviewer: {
+        id: review.users_reviews_user_idTousers?.id || null,
+        name: review.users_reviews_user_idTousers?.full_name || 'Anonymous',
+        profile_picture: review.users_reviews_user_idTousers?.profile_picture || null
+      }
+    }));
+
+    res.status(200).json({
+      success: true,
+      data: {
+        worker_id: workerId,
+        avg_rating: worker.worker_profiles?.avg_rating || 0,
+        total_reviews: totalCount,
+        reviews: transformedReviews,
+        pagination: {
+          current_page: parseInt(page),
+          total_pages: Math.ceil(totalCount / parseInt(limit)),
+          per_page: parseInt(limit),
+          total_count: totalCount
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching worker reviews:', error);
+    res.status(500).json({ 
+      error: 'Internal Server Error',
+      message: error.message 
+    });
+  }
+};
+
+module.exports = { getWorkers, searchWorkers, createWorker, createWorkerService, createWorkerAvailability, updateWorkerProfile, updateWorkerService, updateAvailability, getWorkerDetails, getWorkerDashboardSummary, getWorkerDashboardTasks, getWorkerDetailsByEmail, getWorkerById, verifyWorker, suspendWorker, rejectWorker, activateWorker, getWorkerNotifications, markNotificationAsRead, markAllNotificationsAsRead, getWorkerReviews }; 
