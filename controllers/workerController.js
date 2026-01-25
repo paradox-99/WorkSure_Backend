@@ -574,8 +574,8 @@ const getWorkerDetailsByEmail = async (req, res) => {
       return res.status(400).json({ error: 'Email is required' });
     }
 
-    // Fetch worker details with all related information
-    const workerDetails = await prisma.users.findUnique({
+    // Fetch basic worker details first (faster query)
+    const worker = await prisma.users.findUnique({
       where: { email: email },
       select: {
         id: true,
@@ -589,7 +589,6 @@ const getWorkerDetailsByEmail = async (req, res) => {
         created_at: true,
         last_login_at: true,
         status: true,
-        // Worker profile
         worker_profiles: {
           select: {
             display_name: true,
@@ -602,9 +601,25 @@ const getWorkerDetailsByEmail = async (req, res) => {
             created_at: true,
             updated_at: true
           }
-        },
+        }
+      }
+    });
+
+    if (!worker) {
+      return res.status(404).json({ error: 'Worker not found' });
+    }
+
+    // Check if user is actually a worker
+    if (worker.role !== 'worker') {
+      return res.status(403).json({ error: 'User is not a worker' });
+    }
+
+    // Fetch additional data in a single transaction (uses one connection)
+    const [workerServices, availabilities, addresses, reviews] = await prisma.$transaction(async (tx) => {
+      return Promise.all([
         // Services offered by worker
-        worker_services: {
+        tx.worker_services.findMany({
+          where: { user_id: worker.id },
           select: {
             id: true,
             base_price: true,
@@ -628,18 +643,20 @@ const getWorkerDetailsByEmail = async (req, res) => {
               }
             }
           }
-        },
+        }),
         // Availability
-        availabilities: {
+        tx.availabilities.findMany({
+          where: { user_id: worker.id },
           select: {
             id: true,
             available_from: true,
             available_to: true,
             weekend: true
           }
-        },
+        }),
         // Addresses
-        addresses: {
+        tx.addresses.findMany({
+          where: { user_id: worker.id },
           select: {
             id: true,
             street: true,
@@ -649,9 +666,10 @@ const getWorkerDetailsByEmail = async (req, res) => {
             lat: true,
             lon: true
           }
-        },
-        // Reviews received by worker
-        reviews_reviews_worker_idTousers: {
+        }),
+        // Reviews (limit to 10 recent)
+        tx.reviews.findMany({
+          where: { worker_id: worker.id },
           select: {
             id: true,
             rating: true,
@@ -669,18 +687,18 @@ const getWorkerDetailsByEmail = async (req, res) => {
             created_at: 'desc'
           },
           take: 10
-        }
-      }
+        })
+      ]);
     });
 
-    if (!workerDetails) {
-      return res.status(404).json({ error: 'Worker not found' });
-    }
-
-    // Check if user is actually a worker
-    if (workerDetails.role !== 'worker') {
-      return res.status(403).json({ error: 'User is not a worker' });
-    }
+    // Combine all data
+    const workerDetails = {
+      ...worker,
+      worker_services: workerServices,
+      availabilities: availabilities,
+      addresses: addresses,
+      reviews_reviews_worker_idTousers: reviews
+    };
 
     res.status(200).json({
       success: true,
