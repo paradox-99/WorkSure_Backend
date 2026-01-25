@@ -1011,4 +1011,143 @@ const getComplaintDetails = async (req, res) => {
      }
 };
 
-module.exports = { getUsers, createUser, updateAddress, updateUser, getUserData, getUserById, suspendUser, activateUser, getUserByEmail, createworker, checkWorkerAvailability, createReview, createComplaint, getComplaintDetails };
+
+/**
+ * Get User Notifications
+ * Returns all notifications for a user
+ * @route GET /api/userRoutes/notifications/:id
+ */
+const getUserNotifications = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({ error: 'ID is required' });
+    }
+
+    // Fetch user by id
+    const user = await prisma.users.findUnique({
+      where: { id: id },
+      select: { id: true, role: true }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (user.role !== 'client') {
+      return res.status(403).json({
+        error: 'Access denied. This endpoint is only accessible to clients.'
+      });
+    }
+
+    // Fetch notifications for the user
+    const notifications = await prisma.notifications.findMany({
+      where: {
+        user_id: user.id
+      },
+      orderBy: {
+        created_at: 'desc'
+      }
+    });
+
+    // Count unread notifications
+    const unreadCount = notifications.filter(n => !n.is_read).length;
+
+    res.status(200).json({
+      success: true,
+      total: notifications.length,
+      unread: unreadCount,
+      data: notifications
+    });
+  } catch (error) {
+    console.error('Error fetching user notifications:', error);
+    res.status(500).json({
+      error: 'Failed to fetch notifications',
+      message: error.message
+    });
+  }
+};
+
+/**
+ * Mark Notification as Read
+ * @route PATCH /api/userRoutes/notifications/:id/read
+ */
+const markNotificationAsRead = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const notification = await prisma.notifications.update({
+      where: { id },
+      data: { is_read: true }
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Notification marked as read',
+      data: notification
+    });
+  } catch (error) {
+    console.error('Error updating notification:', error);
+    res.status(500).json({
+      error: 'Failed to update notification',
+      message: error.message
+    });
+  }
+};
+
+/**
+ * Mark All Notifications as Read
+ * @route PATCH /api/userRoutes/notifications/read-all/:id
+ */
+const markAllNotificationsAsRead = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({ error: 'Id is required' });
+    }
+
+    // Fetch user by id
+    const user = await prisma.users.findUnique({
+      where: { id: id },
+      select: { role: true }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (user.role !== 'client') {
+      return res.status(403).json({
+        error: 'Access denied. This endpoint is only accessible to clients.'
+      });
+    }
+
+    // Update all unread notifications
+    const result = await prisma.notifications.updateMany({
+      where: {
+        user_id: user.id,
+        is_read: false
+      },
+      data: {
+        is_read: true
+      }
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'All notifications marked as read',
+      updated_count: result.count
+    });
+  } catch (error) {
+    console.error('Error updating notifications:', error);
+    res.status(500).json({
+      error: 'Failed to update notifications',
+      message: error.message
+    });
+  }
+};
+
+
+module.exports = { getUsers, createUser, updateAddress, updateUser, getUserData, getUserById, suspendUser, activateUser, getUserByEmail, createworker, checkWorkerAvailability, createReview, createComplaint, getComplaintDetails, getUserNotifications, markNotificationAsRead, markAllNotificationsAsRead };

@@ -855,6 +855,9 @@ const acceptExtraItems = async (req, res) => {
 const getAwaitingWorkDetails = async (req, res) => {
      const { orderId } = req.params;
 
+     console.log(orderId);
+     
+
      try {
           // Fetch order with full details including reviews and ratings
           const order = await prisma.orders.findUnique({
