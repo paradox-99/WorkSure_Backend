@@ -1,9 +1,9 @@
 const prisma = require("../config/prisma");
 
-const store_id = process.env.SSLCOMMERZ_STORE_ID;
-const store_passwd = process.env.SSLCOMMERZ_STORE_PASSWORD;
-const is_live = process.env.SSLCOMMERZ_IS_LIVE === 'true'; // false for sandbox
-const { FRONTEND_URL, BACKEND_URL } = process.env;
+const store_id = process.env.WORKSURE_SSLCOMMERZ_STORE_ID;
+const store_passwd = process.env.WORKSURE_SSLCOMMERZ_STORE_PASSWORD;
+const is_live = process.env.WORKSURE_SSLCOMMERZ_IS_LIVE === 'true'; // false for sandbox
+const { WORKSURE_FRONTEND_URL, WORKSURE_BACKEND_URL } = process.env;
 
 // SSLCommerz API URL
 const SSLCOMMERZ_API_URL = is_live 
@@ -276,10 +276,10 @@ const initiateSSLPayment = async (req, res) => {
                total_amount: totalAmount,
                currency: 'BDT',
                tran_id: tran_id,
-               success_url: `${BACKEND_URL}/api/paymentRoutes/ssl/success/${tran_id}`,
-               fail_url: `${BACKEND_URL}/api/paymentRoutes/ssl/fail/${tran_id}`,
-               cancel_url: `${BACKEND_URL}/api/paymentRoutes/ssl/cancel/${tran_id}`,
-               ipn_url: `${BACKEND_URL}/api/paymentRoutes/ssl/ipn/${tran_id}`,
+               success_url: `${WORKSURE_BACKEND_URL}/api/paymentRoutes/ssl/success/${tran_id}`,
+               fail_url: `${WORKSURE_BACKEND_URL}/api/paymentRoutes/ssl/fail/${tran_id}`,
+               cancel_url: `${WORKSURE_BACKEND_URL}/api/paymentRoutes/ssl/cancel/${tran_id}`,
+               ipn_url: `${WORKSURE_BACKEND_URL}/api/paymentRoutes/ssl/ipn/${tran_id}`,
                shipping_method: 'NO',
                product_name: 'WorkSure Service',
                product_category: 'Service',
@@ -367,7 +367,7 @@ const sslPaymentSuccess = async (req, res) => {
 
      try {
           if (status !== 'VALID') {
-               return res.redirect(`${FRONTEND_URL}/payment/failed`);
+               return res.redirect(`${WORKSURE_FRONTEND_URL}/payment/failed`);
           }
 
           // Find payment by transaction ID
@@ -376,7 +376,7 @@ const sslPaymentSuccess = async (req, res) => {
           });
 
           if (!payment) {
-               return res.redirect(`${FRONTEND_URL}/payment/failed`);
+               return res.redirect(`${WORKSURE_FRONTEND_URL}/payment/failed`);
           }
 
           // Validate the transaction with SSLCommerz
@@ -403,13 +403,13 @@ const sslPaymentSuccess = async (req, res) => {
                     }
                });
 
-               return res.redirect(`${FRONTEND_URL}/payment/success`);
+               return res.redirect(`${WORKSURE_FRONTEND_URL}/payment/success`);
           } else {
-               return res.redirect(`${FRONTEND_URL}/payment/failed`);
+               return res.redirect(`${WORKSURE_FRONTEND_URL}/payment/failed`);
           }
      } catch (error) {
           console.error("Error processing SSL payment success:", error);
-          return res.redirect(`${FRONTEND_URL}/payment/failed`);
+          return res.redirect(`${WORKSURE_FRONTEND_URL}/payment/failed`);
      }
 };
 
@@ -429,10 +429,10 @@ const sslPaymentFail = async (req, res) => {
                });
           }
 
-          return res.redirect(`${FRONTEND_URL}/payment/failed`);
+          return res.redirect(`${WORKSURE_FRONTEND_URL}/payment/failed`);
      } catch (error) {
           console.error("Error processing SSL payment failure:", error);
-          return res.redirect(`${FRONTEND_URL}/payment/failed`);
+          return res.redirect(`${WORKSURE_FRONTEND_URL}/payment/failed`);
      }
 };
 
@@ -452,10 +452,10 @@ const sslPaymentCancel = async (req, res) => {
                });
           }
 
-          return res.redirect(`${FRONTEND_URL}/payment/cancelled`);
+          return res.redirect(`${WORKSURE_FRONTEND_URL}/payment/cancelled`);
      } catch (error) {
           console.error("Error processing SSL payment cancellation:", error);
-          return res.redirect(`${FRONTEND_URL}/payment/cancelled`);
+          return res.redirect(`${WORKSURE_FRONTEND_URL}/payment/cancelled`);
      }
 };
 
