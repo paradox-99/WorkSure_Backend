@@ -666,27 +666,6 @@ const getWorkerDetailsByEmail = async (req, res) => {
             lat: true,
             lon: true
           }
-        }),
-        // Reviews (limit to 10 recent)
-        tx.reviews.findMany({
-          where: { worker_id: worker.id },
-          select: {
-            id: true,
-            rating: true,
-            comment: true,
-            created_at: true,
-            users_reviews_user_idTousers: {
-              select: {
-                id: true,
-                full_name: true,
-                profile_picture: true
-              }
-            }
-          },
-          orderBy: {
-            created_at: 'desc'
-          },
-          take: 10
         })
       ]);
     });

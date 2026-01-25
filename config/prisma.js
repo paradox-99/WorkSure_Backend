@@ -13,7 +13,7 @@ if (!globalForPrisma.prisma) {
     max: 20,              // Maximum number of connections in the pool (increased from 10)
     min: 2,               // Minimum number of connections to keep alive
     idleTimeoutMillis: 30000,  // Close idle connections after 30 seconds (reduced from 60)
-    connectionTimeoutMillis: 10000,  // Return an error after 10 seconds if connection could not be established
+    connectionTimeoutMillis: 20000,  // Return an error after 10 seconds if connection could not be established
     allowExitOnIdle: true  // Allow the pool to exit when all connections are idle
   });
 
