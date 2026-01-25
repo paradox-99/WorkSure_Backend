@@ -4,6 +4,9 @@ const dotenv = require('dotenv')
 
 dotenv.config();
 
+// Set timezone to Bangladesh (UTC+6)
+process.env.TZ = 'Asia/Dhaka';
+
 const port = process.env.PORT || 3000;
 
 const server = http.createServer(app)
@@ -13,5 +16,5 @@ app.get('/', (req, res) => {
 })
 
 server.listen(port, () => {
-    console.log("running on port: ", port);
+    console.log("running on port: ", port);;
 })

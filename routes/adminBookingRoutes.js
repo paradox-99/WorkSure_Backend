@@ -20,6 +20,67 @@ const {
      adminGetPaymentsSummary,
      adminRefundPayment
 } = require('../controllers/paymentController');
+const {
+     getDashboardSummary,
+     getBookingStats,
+     getRevenueStats,
+     getComplaintStats,
+     getReviewStats,
+     getRecentActivities
+} = require('../controllers/adminDashboardController');
+
+/**
+ * Dashboard Overview APIs
+ */
+
+/**
+ * @route   GET /api/admin/dashboard/summary
+ * @desc    Get overall dashboard summary statistics
+ * @access  Admin
+ */
+router.get('/dashboard/summary', getDashboardSummary);
+
+/**
+ * @route   GET /api/admin/dashboard/bookings
+ * @desc    Get booking statistics over time
+ * @access  Admin
+ * @query   range (e.g., 7d, 30d, 90d)
+ */
+router.get('/dashboard/bookings', getBookingStats);
+
+/**
+ * @route   GET /api/admin/dashboard/revenue
+ * @desc    Get revenue statistics over time
+ * @access  Admin
+ * @query   range (e.g., 7d, 30d, 90d)
+ */
+router.get('/dashboard/revenue', getRevenueStats);
+
+/**
+ * @route   GET /api/admin/dashboard/complaints
+ * @desc    Get complaint statistics
+ * @access  Admin
+ */
+router.get('/dashboard/complaints', getComplaintStats);
+
+/**
+ * @route   GET /api/admin/dashboard/reviews
+ * @desc    Get review statistics
+ * @access  Admin
+ */
+router.get('/dashboard/reviews', getReviewStats);
+
+/**
+ * @route   GET /api/admin/dashboard/recent-activities
+ * @desc    Get recent activities across the platform
+ * @access  Admin
+ * @query   limit (default: 10)
+ */
+router.get('/dashboard/recent-activities', getRecentActivities);
+
+/**
+ * Booking Management APIs
+ */
 
 /**
  * @route   GET /api/admin/bookings
