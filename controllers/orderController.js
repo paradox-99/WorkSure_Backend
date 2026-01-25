@@ -53,6 +53,18 @@ const createOrder = async (req, res) => {
                console.error('Failed to send hiring request email:', err);
           });
 
+          // Create notification for worker
+          await prisma.notifications.create({
+               data: {
+                    user_id: worker_id,
+                    title: "New Booking Request",
+                    body: `You have a new booking request from ${client.full_name} for ${selected_time ? new Date(selected_time).toLocaleString() : 'a scheduled time'}.`,
+                    is_read: false
+               }
+          }).catch(err => {
+               console.error('Failed to create notification:', err);
+          });
+
           res.status(201).json({
                message: "Order created successfully",
                order
