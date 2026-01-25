@@ -12,7 +12,7 @@ if (!globalForPrisma.prisma) {
     connectionString: process.env.URL,
     max: 10,              // Maximum number of connections in the pool
     idleTimeoutMillis: 30000,  // Close idle connections after 30 seconds
-    connectionTimeoutMillis: 2000,  // Return an error after 2 seconds if connection could not be established
+    connectionTimeoutMillis: 10000,  // Return an error after 2 seconds if connection could not be established
   });
 
   // 2. Create the Prisma Adapter

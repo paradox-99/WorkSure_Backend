@@ -1,5 +1,5 @@
 const prisma = require("../config/prisma");
-const { sendHiringRequestEmail } = require("./mailController");
+const { sendHiringRequestEmail, sendRequestAcceptedEmail, sendRequestCancelledEmail } = require("./mailController");
 
 const createOrder = async (req, res) => {
      const { client_email, worker_id, selected_time, address, description, total_amount } = req.body;
@@ -475,7 +475,7 @@ const acceptRequest = async (req, res) => {
           // Lookup worker by email
           const worker = await prisma.users.findUnique({
                where: { email: workerEmail },
-               select: { id: true }
+               select: { id: true, full_name: true }
           });
 
           if (!worker) {
@@ -506,6 +506,24 @@ const acceptRequest = async (req, res) => {
                     updated_at: new Date()
                },
           });
+
+          // Fetch client details for email
+          const client = await prisma.users.findUnique({
+               where: { id: order.client_id },
+               select: { email: true, full_name: true }
+          });
+
+          // Send acceptance email to client
+          if (client && client.email) {
+               await sendRequestAcceptedEmail({
+                    clientEmail: client.email,
+                    clientName: client.full_name,
+                    workerName: worker.full_name || 'Worker',
+                    address: order.address || 'Not specified',
+                    description: order.description || 'No description provided',
+                    selectedTime: order.selected_time
+               });
+          }
 
           // Notify client
           await prisma.notifications.create({
@@ -540,7 +558,7 @@ const cancelRequest = async (req, res) => {
           // Lookup worker by email
           const worker = await prisma.users.findUnique({
                where: { email: workerEmail },
-               select: { id: true }
+               select: { id: true, full_name: true }
           });
 
           if (!worker) {
@@ -573,6 +591,25 @@ const cancelRequest = async (req, res) => {
                     updated_at: new Date()
                }
           });
+
+          // Fetch client details for email
+          const client = await prisma.users.findUnique({
+               where: { id: order.client_id },
+               select: { email: true, full_name: true }
+          });
+
+          // Send cancellation email to client
+          if (client && client.email) {
+               await sendRequestCancelledEmail({
+                    clientEmail: client.email,
+                    clientName: client.full_name,
+                    workerName: worker.full_name || 'Worker',
+                    address: order.address || 'Not specified',
+                    description: order.description || 'No description provided',
+                    cancelReason: reason,
+                    selectedTime: order.selected_time
+               });
+          }
 
           // Notify client
           await prisma.notifications.create({
