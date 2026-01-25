@@ -648,7 +648,7 @@ const createReview = async (req, res) => {
           await prisma.orders.update({
                where: { id: orderId },
                data: {
-                    reviewed: true
+                    is_reviewed: true
                }
           });
 
