@@ -18,8 +18,5 @@
         "api/**/*.js": {
             "maxDuration": 10
         }
-    },
-    "env": {
-        "WORKSURE_DATABASE_URL": "@worksure-database-url"
     }
 }
