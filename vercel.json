@@ -10,7 +10,22 @@
         {
             "src": "/(.*)",
             "dest": "index.js",
-            "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+            "methods": [
+                "GET",
+                "POST",
+                "PUT",
+                "PATCH",
+                "DELETE",
+                "OPTIONS"
+            ]
         }
-    ]
+    ],
+    "functions": {
+        "api/**/*.js": {
+            "maxDuration": 10
+        }
+    },
+    "env": {
+        "WORKSURE_DATABASE_URL": "@worksure-database-url"
+    }
 }
