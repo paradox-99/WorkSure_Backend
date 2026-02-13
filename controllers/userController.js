@@ -278,7 +278,7 @@ const getUserById = async (req, res) => {
                               orders_orders_client_idTousers: true,
                               orders_orders_assigned_worker_idTousers: true,
                               payments: true,
-                              reviews_reviews_reviewer_idTousers: true
+                              reviews_reviews_user_idTousers: true
                          }
                     }
                }
@@ -309,7 +309,7 @@ const getUserById = async (req, res) => {
                     totalBookingsAsClient: user._count.orders_orders_client_idTousers,
                     totalBookingsAsWorker: user._count.orders_orders_assigned_worker_idTousers,
                     totalPayments: user._count.payments,
-                    totalReviews: user._count.reviews_reviews_reviewer_idTousers
+                    totalReviews: user._count.reviews_reviews_user_idTousers
                }
           };
 
