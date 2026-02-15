@@ -1,5 +1,31 @@
 const prisma = require('../config/prisma');
 
+const checkEmailExists = async (req, res) => {
+     const { email } = req.params;
+
+     try {
+          const user = await prisma.users.findUnique({
+               where: {
+                    email
+               },
+               select: {
+                    id: true,
+                    email: true,
+                    role: true
+               }
+          });
+
+          if (user) {
+               return res.status(200).json({ exists: true, user });
+          } else {
+               return res.status(200).json({ exists: false });
+          }
+     } catch (error) {
+          console.error("Error checking email existence:", error);
+          res.status(500).json({ error: "Internal Server Error" });
+     }
+}
+
 const getUsers = async (req, res) => {
      try {
           const users = await prisma.users.findMany({
@@ -48,9 +74,12 @@ const getUsers = async (req, res) => {
 }
 
 const createUser = async (req, res) => {
-     const { email, phone, full_name, gender, date_of_birth, nid, profile_picture, street, city, district, postal_code, lat, lon } = req.body
+     const { email, phone, name, gender, date_of_birth, nid, profile_picture } = req.body
 
      try {
+
+          const full_name = name;
+
           await prisma.$transaction(async (tx) => {
                const user = await tx.users.create({
                     data: {
@@ -60,25 +89,11 @@ const createUser = async (req, res) => {
                          gender,
                          date_of_birth: new Date(date_of_birth),
                          nid,
-                         password_hash: "sdskspassword",
                          profile_picture,
                          created_at: new Date()
                     },
                     select: {
                          id: true
-                    }
-               });
-
-               // 2️⃣ Create address
-               await tx.addresses.create({
-                    data: {
-                         userId: user.id,
-                         street,
-                         city,
-                         district,
-                         postal_code,
-                         lat,
-                         lon
                     }
                });
           });
@@ -87,6 +102,41 @@ const createUser = async (req, res) => {
 
      } catch (error) {
           console.error("Error creating user:", error);
+          res.status(500).json({ error: "Internal Server Error" });
+     }
+}
+
+const createUserAddress = async (req, res) => {
+     const { email, street, city, district, postal_code, lat, lon } = req.body;
+
+     try {
+
+          const user = await prisma.users.findUnique({
+               where: { email },
+               select: { id: true }
+          });
+
+          if (!user) {
+               return res.status(404).json({ error: "User not found" });
+          }
+
+          const userId = user.id;
+
+          const address = await prisma.addresses.create({
+               data: {
+                    user_id: userId,
+                    street,
+                    city,
+                    district,
+                    postal_code,
+                    lat,
+                    lon
+               }
+          });
+
+          res.status(201).json({ message: "Address added successfully", address });
+     } catch (error) {
+          console.error("Error creating user address:", error);
           res.status(500).json({ error: "Internal Server Error" });
      }
 }
@@ -116,7 +166,7 @@ const createworker = async (req, res) => {
                // 2️⃣ Create address
                await tx.addresses.create({
                     data: {
-                         userId: user.id,
+                         user_id: user.id,
                          street,
                          city,
                          district,
@@ -1269,4 +1319,4 @@ const getUserReviews = async (req, res) => {
 };
 
 
-module.exports = { getUsers, createUser, updateAddress, updateUser, getUserData, getUserById, suspendUser, activateUser, getUserByEmail, createworker, checkWorkerAvailability, createReview, createComplaint, getComplaintDetails, getUserNotifications, markNotificationAsRead, markAllNotificationsAsRead, getUserReviews };
+module.exports = { getUsers, createUser, updateAddress, updateUser, getUserData, getUserById, suspendUser, activateUser, getUserByEmail, createworker, checkWorkerAvailability, createReview, createComplaint, getComplaintDetails, getUserNotifications, markNotificationAsRead, markAllNotificationsAsRead, getUserReviews, checkEmailExists, createUserAddress };
