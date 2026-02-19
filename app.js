@@ -16,6 +16,7 @@ const app = express();
 app.use(cors({
     origin: [
         'http://localhost:8080',
+        'https://worksure-bd.web.app',
     ],
     credentials: true
 }));

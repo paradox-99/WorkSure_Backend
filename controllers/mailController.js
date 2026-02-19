@@ -5,14 +5,14 @@ dotenv.config();
 exports.sendTest = async (req, res) => {
   const { ToEmail, ToName, Subject, TextPart, HTMLPart } = req.body || {};
 
-  const emailFrom = process.env.FROM_EMAIL
+  const emailFrom = process.env.WORKSURE_FROM_EMAIL
 
   const message = {
     Messages: [
       {
         From: {
           Email: emailFrom || 'rinayeem546@gmail.com',
-          Name: process.env.FROM_NAME || 'WorkSure'
+          Name: process.env.WORKSURE_FROM_NAME || 'WorkSure'
         },
         To: [
           {
@@ -53,7 +53,7 @@ exports.sendTest = async (req, res) => {
  * @returns {Promise<Object>} - Email send result
  */
 exports.sendHiringRequestEmail = async ({ workerEmail, workerName, clientName, address, description, selectedTime }) => {
-  const emailFrom = process.env.FROM_EMAIL;
+  const emailFrom = process.env.WORKSURE_FROM_EMAIL;
   const formattedTime = selectedTime ? new Date(selectedTime).toLocaleString('en-US', {
     weekday: 'long',
     year: 'numeric',
@@ -68,7 +68,7 @@ exports.sendHiringRequestEmail = async ({ workerEmail, workerName, clientName, a
       {
         From: {
           Email: emailFrom || 'rinayeem546@gmail.com',
-          Name: process.env.FROM_NAME || 'WorkSure'
+          Name: process.env.WORKSURE_FROM_NAME || 'WorkSure'
         },
         To: [
           {
@@ -131,7 +131,7 @@ exports.sendHiringRequestEmail = async ({ workerEmail, workerName, clientName, a
  * @returns {Promise<Object>} - Email send result
  */
 exports.sendRequestAcceptedEmail = async ({ clientEmail, clientName, workerName, address, description, selectedTime }) => {
-  const emailFrom = process.env.FROM_EMAIL;
+  const emailFrom = process.env.WORKSURE_FROM_EMAIL;
   const formattedTime = selectedTime ? new Date(selectedTime).toLocaleString('en-US', {
     weekday: 'long',
     year: 'numeric',
@@ -146,7 +146,7 @@ exports.sendRequestAcceptedEmail = async ({ clientEmail, clientName, workerName,
       {
         From: {
           Email: emailFrom || 'rinayeem546@gmail.com',
-          Name: process.env.FROM_NAME || 'WorkSure'
+          Name: process.env.WORKSURE_FROM_NAME || 'WorkSure'
         },
         To: [
           {
@@ -211,7 +211,7 @@ exports.sendRequestAcceptedEmail = async ({ clientEmail, clientName, workerName,
  * @returns {Promise<Object>} - Email send result
  */
 exports.sendRequestCancelledEmail = async ({ clientEmail, clientName, workerName, address, description, cancelReason, selectedTime }) => {
-  const emailFrom = process.env.FROM_EMAIL;
+  const emailFrom = process.env.WORKSURE_FROM_EMAIL;
   const formattedTime = selectedTime ? new Date(selectedTime).toLocaleString('en-US', {
     weekday: 'long',
     year: 'numeric',
@@ -226,7 +226,7 @@ exports.sendRequestCancelledEmail = async ({ clientEmail, clientName, workerName
       {
         From: {
           Email: emailFrom || 'rinayeem546@gmail.com',
-          Name: process.env.FROM_NAME || 'WorkSure'
+          Name: process.env.WORKSURE_FROM_NAME || 'WorkSure'
         },
         To: [
           {

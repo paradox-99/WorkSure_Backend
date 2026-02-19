@@ -1,4 +1,31 @@
 const prisma = require('../config/prisma');
+const { verification_status } = require('../generated/prisma');
+
+const checkEmailExists = async (req, res) => {
+     const { email } = req.params;
+
+     try {
+          const user = await prisma.users.findUnique({
+               where: {
+                    email
+               },
+               select: {
+                    id: true,
+                    email: true,
+                    role: true
+               }
+          });
+
+          if (user) {
+               return res.status(200).json({ exists: true, user });
+          } else {
+               return res.status(200).json({ exists: false });
+          }
+     } catch (error) {
+          console.error("Error checking email existence:", error);
+          res.status(500).json({ error: "Internal Server Error" });
+     }
+}
 
 const getUsers = async (req, res) => {
      try {
@@ -48,9 +75,12 @@ const getUsers = async (req, res) => {
 }
 
 const createUser = async (req, res) => {
-     const { email, phone, full_name, gender, date_of_birth, nid, profile_picture, street, city, district, postal_code, lat, lon } = req.body
+     const { email, phone, name, gender, date_of_birth, nid, profile_picture } = req.body
 
      try {
+
+          const full_name = name;
+
           await prisma.$transaction(async (tx) => {
                const user = await tx.users.create({
                     data: {
@@ -60,25 +90,11 @@ const createUser = async (req, res) => {
                          gender,
                          date_of_birth: new Date(date_of_birth),
                          nid,
-                         password_hash: "sdskspassword",
                          profile_picture,
                          created_at: new Date()
                     },
                     select: {
                          id: true
-                    }
-               });
-
-               // 2️⃣ Create address
-               await tx.addresses.create({
-                    data: {
-                         userId: user.id,
-                         street,
-                         city,
-                         district,
-                         postal_code,
-                         lat,
-                         lon
                     }
                });
           });
@@ -91,46 +107,118 @@ const createUser = async (req, res) => {
      }
 }
 
-const createworker = async (req, res) => {
-     const { email, phone, full_name, gender, date_of_birth, nid, profile_picture, street, city, district, postal_code, lat, lon } = req.body
+const createUserAddress = async (req, res) => {
+     const { email, street, city, district, postal_code, lat, lon } = req.body;
 
      try {
-          await prisma.$transaction(async (tx) => {
-               const user = await tx.users.create({
-                    data: {
-                         email,
-                         phone,
-                         full_name,
-                         gender,
-                         date_of_birth: new Date(date_of_birth),
-                         nid,
-                         password_hash: "sdskspassword",
-                         profile_picture,
-                         created_at: new Date()
-                    },
-                    select: {
-                         id: true
-                    }
-               });
 
-               // 2️⃣ Create address
-               await tx.addresses.create({
-                    data: {
-                         userId: user.id,
-                         street,
-                         city,
-                         district,
-                         postal_code,
-                         lat,
-                         lon
-                    }
-               });
+          const user = await prisma.users.findUnique({
+               where: { email },
+               select: { id: true }
           });
 
-          res.status(201).json({ message: "User created successfully" });
+          if (!user) {
+               return res.status(404).json({ error: "User not found" });
+          }
 
+          const userId = user.id;
+
+          const address = await prisma.addresses.create({
+               data: {
+                    user_id: userId,
+                    street,
+                    city,
+                    district,
+                    postal_code,
+                    lat,
+                    lon
+               }
+          });
+
+          res.status(201).json({ message: "Address added successfully", address });
      } catch (error) {
-          console.error("Error creating user:", error);
+          console.error("Error creating user address:", error);
+          res.status(500).json({ error: "Internal Server Error" });
+     }
+}
+
+const createWorkerProfile = async (req, res) => {
+     const { email, display_name, bio, years_of_experience } = req.body;
+
+     try {
+          const user = await prisma.users.findUnique({
+               where: { email },
+               select: { id: true }
+          });
+
+          if (!user) {
+               return res.status(404).json({ error: "User not found" });
+          }
+
+          const years_experience = years_of_experience;
+
+          const workerProfile = await prisma.worker_profiles.create({
+               data: {
+                    user_id: user.id,
+                    display_name,
+                    bio,
+                    years_experience,
+                    verification_status: "pending",
+                    documents_count: 0
+               }
+          });
+
+          res.status(201).json({ message: "Worker profile created successfully", workerProfile });
+     } catch (error) {
+          console.error("Error creating worker profile:", error);
+          res.status(500).json({ error: "Internal Server Error" });
+     }
+}
+
+const createWorkerServices = async (req, res) => {
+     const { email, category, sub_category, base_price, skills } = req.body;
+     
+     try {
+          const user = await prisma.users.findUnique({
+               where: { email },
+               select: { id: true }
+          });
+
+          if (!user) {
+               return res.status(404).json({ error: "User not found" });
+          }
+          const workerProfile = await prisma.worker_profiles.findUnique({
+               where: { user_id: user.id },
+               select: { id: true }
+          });
+
+          if (!workerProfile) {
+               return res.status(404).json({ error: "Worker profile not found" });
+          }
+
+          const section = await prisma.service_sections.findUnique({
+               where: { slug: sub_category },
+               select: { id: true }
+          });
+
+          const cat = await prisma.service_categories.findUnique({
+               where: { slug: category},
+               select: { id: true }
+          })
+
+          const workerServices = await prisma.worker_services.create({
+               data: {
+                    worker_profile_id: workerProfile.id,
+                    category: cat.id,
+                    section_id: section.id,
+                    base_price,
+                    skills
+               }
+          });
+
+          res.status(201).json({ message: "Worker services created successfully", workerServices });
+     } catch (error) {
+          console.error("Error creating worker services:", error);
           res.status(500).json({ error: "Internal Server Error" });
      }
 }
@@ -278,7 +366,7 @@ const getUserById = async (req, res) => {
                               orders_orders_client_idTousers: true,
                               orders_orders_assigned_worker_idTousers: true,
                               payments: true,
-                              reviews_reviews_reviewer_idTousers: true
+                              reviews_reviews_user_idTousers: true
                          }
                     }
                }
@@ -309,7 +397,7 @@ const getUserById = async (req, res) => {
                     totalBookingsAsClient: user._count.orders_orders_client_idTousers,
                     totalBookingsAsWorker: user._count.orders_orders_assigned_worker_idTousers,
                     totalPayments: user._count.payments,
-                    totalReviews: user._count.reviews_reviews_reviewer_idTousers
+                    totalReviews: user._count.reviews_reviews_user_idTousers
                }
           };
 
@@ -648,7 +736,7 @@ const createReview = async (req, res) => {
           await prisma.orders.update({
                where: { id: orderId },
                data: {
-                    reviewed: true
+                    is_reviewed: true
                }
           });
 
@@ -1269,4 +1357,4 @@ const getUserReviews = async (req, res) => {
 };
 
 
-module.exports = { getUsers, createUser, updateAddress, updateUser, getUserData, getUserById, suspendUser, activateUser, getUserByEmail, createworker, checkWorkerAvailability, createReview, createComplaint, getComplaintDetails, getUserNotifications, markNotificationAsRead, markAllNotificationsAsRead, getUserReviews };
+module.exports = { getUsers, createUser, updateAddress, updateUser, getUserData, getUserById, suspendUser, activateUser, getUserByEmail, checkWorkerAvailability, createReview, createComplaint, getComplaintDetails, getUserNotifications, markNotificationAsRead, markAllNotificationsAsRead, getUserReviews, checkEmailExists, createUserAddress, createWorkerProfile, createWorkerServices };

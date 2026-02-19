@@ -774,7 +774,7 @@ const getWorkerById = async (req, res) => {
             rating: true,
             comment: true,
             created_at: true,
-            users_reviews_reviewer_idTousers: {
+            users_reviews_user_idTousers: {
               select: {
                 full_name: true,
                 profile_picture: true
@@ -845,8 +845,8 @@ const getWorkerById = async (req, res) => {
         comment: review.comment,
         createdAt: review.created_at,
         reviewer: {
-          name: review.users_reviews_reviewer_idTousers?.full_name,
-          avatar: review.users_reviews_reviewer_idTousers?.profile_picture
+          name: review.users_reviews_user_idTousers?.full_name,
+          avatar: review.users_reviews_user_idTousers?.profile_picture
         }
       })),
       statistics: {

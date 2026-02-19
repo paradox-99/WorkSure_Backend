@@ -5,7 +5,7 @@ const dotenv = require('dotenv')
 dotenv.config();
 
 // Set timezone to Bangladesh (UTC+6)
-process.env.TZ = 'Asia/Dhaka';
+process.env.APP_TIMEZONE = 'Asia/Dhaka';
 
 const port = process.env.PORT || 3000;
 
