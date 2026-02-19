@@ -10,11 +10,11 @@ if (!globalForPrisma.prisma) {
   // 1. Create a Postgres connection pool with proper limits
   const pool = new Pool({ 
     connectionString: process.env.WORKSURE_DATABASE_URL,
-    max: 1,              // Maximum number of connections in the pool (increased from 10)
-    // min: 2,               // Minimum number of connections to keep alive
-    // idleTimeoutMillis: 60000,  // Close idle connections after 60 seconds (increased from 30)
-    // connectionTimeoutMillis: 20000,  // Return an error after 20 seconds if connection could not be established
-    // allowExitOnIdle: true  // Allow the pool to exit when all connections are idle
+    max: 10,              // Maximum number of connections in the pool (INCREASED from 1)
+    min: 2,               // Minimum number of connections to keep alive
+    idleTimeoutMillis: 60000,  // Close idle connections after 60 seconds
+    connectionTimeoutMillis: 10000,  // Return an error after 10 seconds if connection could not be established
+    allowExitOnIdle: false  // Keep pool alive for serverless
   });
 
   // 2. Create the Prisma Adapter
