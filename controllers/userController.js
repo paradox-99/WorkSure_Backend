@@ -143,7 +143,7 @@ const createUserAddress = async (req, res) => {
 }
 
 const createWorkerProfile = async (req, res) => {
-     const { email, display_name, bio, years_experience } = req.body;
+     const { email, display_name, bio, years_of_experience } = req.body;
 
      try {
           const user = await prisma.users.findUnique({
@@ -154,6 +154,8 @@ const createWorkerProfile = async (req, res) => {
           if (!user) {
                return res.status(404).json({ error: "User not found" });
           }
+
+          const years_experience = years_of_experience;
 
           const workerProfile = await prisma.worker_profiles.create({
                data: {
