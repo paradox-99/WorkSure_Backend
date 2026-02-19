@@ -1,10 +1,14 @@
 const express = require('express');
 const router = express.Router();
-const {getUsers, createUser, updateAddress, updateUser, getUserData, getUserById, suspendUser, activateUser, getUserByEmail, checkWorkerAvailability, createReview, createComplaint, getComplaintDetails, getUserNotifications, markAllNotificationsAsRead, markNotificationAsRead, getUserReviews } = require('../controllers/userController');
+const {getUsers, createUser, updateAddress, updateUser, getUserData, getUserById, suspendUser, activateUser, getUserByEmail, checkWorkerAvailability, createReview, createComplaint, getComplaintDetails, getUserNotifications, markAllNotificationsAsRead, markNotificationAsRead, getUserReviews, checkEmailExists, createUserAddress, createWorkerProfile, createWorkerServices } = require('../controllers/userController');
 
+router.get('/checkEmail/:email', checkEmailExists);
 router.get('/users', getUsers);
 router.get('/adminGetUserData/:id', getUserById);
 router.post('/createUser', createUser);
+router.post('/createUserAddress', createUserAddress);
+router.post('/createWorkerProfile', createWorkerProfile);
+router.post('/createWorkerServices', createWorkerServices);
 router.patch('/updateAddress', updateAddress);
 router.patch('/updateUser', updateUser);
 router.patch('/suspendUser/:id', suspendUser);
