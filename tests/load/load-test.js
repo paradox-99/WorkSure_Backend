@@ -139,12 +139,13 @@ export default function () {
      // TC-L05: Search Workers
      // -------------------------------------------------------
      group('TC-L05: Search Workers', () => {
+          // Dhaka coordinates: lat=23.8103, lon=90.4125
           const res = handleResponse(
-               http.get(`${BASE_URL}/workerRoutes/workers/search?query=plumber`, { headers }),
+               http.get(`${BASE_URL}/workerRoutes/workers/search?lat=23.8103&lon=90.4125&radiusMeters=5000`, { headers }),
                'TC-L05'
           );
           const passed = check(res, {
-               'TC-L05: server responds': (r) => r.status >= 200 && r.status < 500,
+               'TC-L05: status is 200': (r) => r.status === 200,
                'TC-L05: response time < 2s': (r) => r.timings.duration < 2000,
           });
           errorRate.add(!passed);

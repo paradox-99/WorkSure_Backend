@@ -7,14 +7,14 @@ require('dotenv').config();
 const globalForPrisma = globalThis;
 
 if (!globalForPrisma.prisma) {
-  // 1. Create a Postgres connection pool with proper limits
+  // 1. Create a Postgres connection pool with proper limits for Serverless
   const pool = new Pool({ 
     connectionString: process.env.WORKSURE_DATABASE_URL,
-    max: 10,              // Maximum number of connections in the pool (INCREASED from 1)
-    min: 2,               // Minimum number of connections to keep alive
-    idleTimeoutMillis: 60000,  // Close idle connections after 60 seconds
+    max: 5,              // Optimal for serverless with Supabase pooler
+    min: 1,               // Minimum number of connections to keep alive
+    idleTimeoutMillis: 30000,  // Close idle connections after 30 seconds (serverless optimization)
     connectionTimeoutMillis: 10000,  // Return an error after 10 seconds if connection could not be established
-    allowExitOnIdle: false  // Keep pool alive for serverless
+    allowExitOnIdle: true  // Important for serverless to release resources
   });
 
   // 2. Create the Prisma Adapter
