@@ -28,7 +28,7 @@ export const options = {
      },
 };
 
-const BASE_URL = 'http://localhost:3000/api';
+const BASE_URL = 'https://work-sure-backend.vercel.app/api';
 
 // Helper: common headers
 const headers = {

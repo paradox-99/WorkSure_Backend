@@ -2,7 +2,7 @@ const prisma = require("../config/prisma");
 
 const store_id = process.env.WORKSURE_SSLCOMMERZ_STORE_ID;
 const store_passwd = process.env.WORKSURE_SSLCOMMERZ_STORE_PASSWORD;
-const is_live = process.env.WORKSURE_SSLCOMMERZ_IS_LIVE === 'true'; // false for sandbox
+const is_live = process.env.WORKSURE_SSLCOMMERZ_IS_LIVE === 'false'; // false for sandbox
 const { WORKSURE_FRONTEND_URL, WORKSURE_BACKEND_URL } = process.env;
 
 // SSLCommerz API URL
