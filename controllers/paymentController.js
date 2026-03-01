@@ -34,8 +34,6 @@ const querySSLCommertzTransaction = async (transactionId) => {
                tran_id: transactionId
           };
 
-          console.log("SSLCommerz Transaction Query Request:", queryData);
-
           const formData = new URLSearchParams();
           Object.keys(queryData).forEach(key => {
                formData.append(key, queryData[key]);
@@ -50,11 +48,10 @@ const querySSLCommertzTransaction = async (transactionId) => {
           });
 
           const responseText = await response.text();
-          console.log("SSLCommerz Transaction Query Raw Response:", responseText);
+
 
           try {
                const queryResponse = JSON.parse(responseText);
-               console.log("SSLCommerz Transaction Query Response:", queryResponse);
                return queryResponse;
           } catch (parseError) {
                console.error("SSLCommerz transaction query returned non-JSON response:", responseText);
@@ -302,7 +299,6 @@ const initiateSSLPayment = async (req, res) => {
                store_passwd: store_passwd,
           };
 
-          console.log("SSLCommerz Request Data:", JSON.stringify(data, null, 2));
 
           // Make direct API call to SSLCommerz
           const formData = new URLSearchParams();
@@ -321,7 +317,7 @@ const initiateSSLPayment = async (req, res) => {
                });
 
                const responseText = await response.text();
-               console.log("SSLCommerz Raw Response:", responseText);
+               
 
                try {
                     apiResponse = JSON.parse(responseText);
@@ -340,8 +336,6 @@ const initiateSSLPayment = async (req, res) => {
                     error: "Payment gateway error. Please check your SSLCommerz credentials and try again." 
                });
           }
-          
-          console.log("SSLCommerz Response:", apiResponse);
           
 
           if (apiResponse?.GatewayPageURL) {
@@ -520,8 +514,6 @@ const adminGetAllPayments = async (req, res) => {
                sortBy = 'created_at',
                sortOrder = 'desc'
           } = req.query;
-
-          console.log(req.query);
           
 
           const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -813,7 +805,6 @@ const adminGetPaymentsSummary = async (req, res) => {
  * Refund payment / Admin action (Admin)
  */
 const adminRefundPayment = async (req, res) => {
-     console.log("hitted");
      
      try {
           const { id } = req.params;
@@ -872,7 +863,7 @@ const adminRefundPayment = async (req, res) => {
           if (payment.trx_id && payment.trx_id.startsWith('TRX_')) {
                try {
                     // Query transaction status first to verify transaction
-                    console.log("Querying SSLCommerz transaction status for:", payment.trx_id);
+               
                     transactionQueryResponse = await querySSLCommertzTransaction(payment.trx_id);
 
                     if (!transactionQueryResponse || transactionQueryResponse.length === 0) {
@@ -884,7 +875,6 @@ const adminRefundPayment = async (req, res) => {
                               ? transactionQueryResponse[0] 
                               : transactionQueryResponse;
 
-                         console.log("Transaction Query Data:", transactionData);
 
                          // Check if transaction status is valid (VALID or VALIDATED)
                          if (transactionData.status === 'VALID' || transactionData.status === 'VALIDATED') {
@@ -897,7 +887,6 @@ const adminRefundPayment = async (req, res) => {
                                    refund_remarks: refundReason
                               };
 
-                              console.log("SSLCommerz Refund Request:", refundData);
 
                               const formData = new URLSearchParams();
                               Object.keys(refundData).forEach(key => {
@@ -913,7 +902,6 @@ const adminRefundPayment = async (req, res) => {
                               });
 
                               const responseText = await response.text();
-                              console.log("SSLCommerz Refund Raw Response:", responseText);
 
                               try {
                                    sslRefundResponse = JSON.parse(responseText);
@@ -931,7 +919,6 @@ const adminRefundPayment = async (req, res) => {
                                    refundStatus = 'failed';
                               }
 
-                              console.log("SSLCommerz Refund Response:", sslRefundResponse);
                          } else {
                               console.warn("Transaction status is not VALID:", transactionData.status);
                               return res.status(400).json({
@@ -1103,7 +1090,7 @@ const queryRefundStatus = async (req, res) => {
           }
 
           // Query transaction from SSLCommerz to get refund status
-          console.log("Querying SSLCommerz for refund status using refund_ref_id:", refund.refund_ref_id);
+          
           
           const queryData = {
                store_id: store_id,
@@ -1125,7 +1112,6 @@ const queryRefundStatus = async (req, res) => {
           });
 
           const responseText = await response.text();
-          console.log("SSLCommerz Refund Status Query Raw Response:", responseText);
 
           let queryResponse = null;
           try {
@@ -1138,7 +1124,6 @@ const queryRefundStatus = async (req, res) => {
                });
           }
 
-          console.log("SSLCommerz Refund Status Query Response:", queryResponse);
 
           // Extract refund status from response
           let newRefundStatus = refund.refund_status;
@@ -1173,7 +1158,6 @@ const queryRefundStatus = async (req, res) => {
                     }
                });
 
-               console.log(`Refund status updated from ${refund.refund_status} to ${newRefundStatus}`);
           }
 
           res.status(200).json({

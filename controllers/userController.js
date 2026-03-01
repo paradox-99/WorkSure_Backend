@@ -544,8 +544,6 @@ const checkWorkerAvailability = async (req, res) => {
           const workerAvailability = await prisma.availabilities.findFirst({
                where: { user_id: workerId }
           });
-
-          console.log(workerAvailability);
           
 
           if (!workerAvailability) {
@@ -558,20 +556,17 @@ const checkWorkerAvailability = async (req, res) => {
 
           // Get day of week from selected time using UTC (0 = Sunday, 1 = Monday, ..., 6 = Saturday)
           const dayOfWeek = startTime.getUTCDay();
-          console.log("Day of week (UTC):", dayOfWeek, "Date:", startTime.toISOString());
           
           // Standard day names in lowercase for comparison
           const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
           const selectedDay = dayNames[dayOfWeek];
-          console.log("Selected day:", selectedDay);
           
           // Normalize weekend array to lowercase for case-insensitive comparison
           const normalizedWeekend = workerAvailability.weekend?.map(day => day.toLowerCase().trim()) || [];
-          console.log("Normalized weekend:", normalizedWeekend);
+          
           
           // Check if selected date is weekend
           if (normalizedWeekend.includes(selectedDay)) {
-               console.log("inside weekend check");
                
                return res.status(200).json({ 
                     available: false, 
@@ -813,8 +808,6 @@ const createComplaint = async (req, res) => {
                where: { id: raised_by_user_id },
                select: { id: true, role: true, full_name: true }
           });
-
-          console.log(raisedByUser);
           
 
           if (!raisedByUser) {
