@@ -853,9 +853,6 @@ const acceptExtraItems = async (req, res) => {
 const getAwaitingWorkDetails = async (req, res) => {
      const { orderId } = req.params;
 
-     console.log(orderId);
-     
-
      try {
           // Fetch order with full details including reviews and ratings using transaction
           const order = await prisma.$transaction(async (tx) => {
@@ -1224,7 +1221,7 @@ const adminGetBookingById = async (req, res) => {
                               rating: true,
                               comment: true,
                               created_at: true,
-                              users_reviews_reviewer_idTousers: {
+                              users_reviews_user_idTousers: {
                                    select: {
                                         full_name: true,
                                         email: true

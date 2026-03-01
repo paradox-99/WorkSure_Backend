@@ -200,8 +200,6 @@ const getComplaintById = async (req, res) => {
 };
 
 const updateComplaintStatus = async (req, res) => {
-          console.log("update hit");
-
     try {
         const { id } = req.params;
         const { status, admin_notes, resolution } = req.body;
