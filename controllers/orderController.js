@@ -1224,7 +1224,7 @@ const adminGetBookingById = async (req, res) => {
                               rating: true,
                               comment: true,
                               created_at: true,
-                              users_reviews_reviewer_idTousers: {
+                              users_reviews_user_idTousers: {
                                    select: {
                                         full_name: true,
                                         email: true
